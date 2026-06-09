@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CampoIO — Gestión agroganadera</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --verde:#1a5c38;--verde2:#2d7a50;--verde3:#52b788;--verde-claro:#e8f5ee;
+  --gris:#f0ede8;--gris2:#e0ddd8;--txt:#1a1a18;--txt2:#5a5a55;--txt3:#9a9590;
+  --rojo:#c0392b;--naranja:#d4820a;--azul:#1a5c8b;--radius:10px;
+}
+body{font-family:'DM Sans',sans-serif;background:#f7f5f0;color:var(--txt);font-size:14px;min-height:100vh}
+h1,h2,h3{font-family:'Syne',sans-serif}
+*{box-sizing:border-box}
+
+/* LAYOUT */
+.app{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--verde);color:white;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.topbar-logo{font-family:'Syne',sans-serif;font-weight:700;font-size:18px}
+.topbar-logo span{color:#74c69d}
+.topbar-est{font-size:12px;background:rgba(255,255,255,0.15);padding:4px 12px;border-radius:20px;cursor:pointer}
+.topbar-est:hover{background:rgba(255,255,255,0.25)}
+.tabs{display:flex;background:white;border-bottom:1px solid var(--gris2);overflow-x:auto;padding:0 16px;position:sticky;top:49px;z-index:99;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:13px 16px;font-size:13px;font-family:'Syne',sans-serif;font-weight:500;color:var(--txt3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all 0.15s}
+.tab.active{color:var(--verde);border-bottom-color:var(--verde)}
+.content{flex:1;padding:20px;max-width:1000px;margin:0 auto;width:100%}
+.screen{display:none}.screen.active{display:block}
+
+/* CARDS */
+.card{background:white;border-radius:var(--radius);padding:18px;border:1px solid var(--gris2);margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:650px){.grid2,.grid3,.grid4{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+.stat-num{font-family:'Syne',sans-serif;font-size:30px;font-weight:700;color:var(--verde);line-height:1}
+.stat-lbl{font-size:11px;color:var(--txt3);margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
+.stat-sub{font-size:12px;color:var(--txt2);margin-top:5px}
+.sec-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;border:none;transition:all .15s}
+.btn-primary{background:var(--verde);color:white}.btn-primary:hover{background:var(--verde2)}
+.btn-secondary{background:var(--gris);color:var(--txt);border:1px solid var(--gris2)}.btn-secondary:hover{background:var(--gris2)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-danger{background:#fee2e2;color:var(--rojo);border:1px solid #fca5a5}
+.layer-btn{padding:5px 11px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--gris2);background:var(--gris);color:var(--txt2);transition:all .15s;font-family:'DM Sans',sans-serif}
+.layer-btn.active-osm{background:#1a5c38;color:white;border-color:#1a5c38}
+.layer-btn.active-sat{background:#1a5c8b;color:white;border-color:#1a5c8b}
+.layer-btn.active-cop{background:#7c3aed;color:white;border-color:#7c3aed}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-amber{background:#fef3c7;color:#92400e}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-blue{background:#dbeafe;color:#1e40af}
+.badge-gray{background:var(--gris);color:var(--txt2)}
+.badge-purple{background:#ede9fe;color:#5b21b6}
+
+/* TABLES */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
+th{text-align:left;padding:9px 12px;font-family:'Syne',sans-serif;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt3);border-bottom:2px solid var(--gris2);background:#faf9f7;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--gris2);vertical-align:middle}
+tr:hover td{background:#fafaf8}
+tr:last-child td{border-bottom:none}
+
+/* FORMS */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-row.c3{grid-template-columns:1fr 1fr 1fr}
+.form-row.c1{grid-template-columns:1fr}
+@media(max-width:480px){.form-row,.form-row.c3{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;font-weight:500;color:var(--txt2)}
+.field input,.field select,.field textarea{padding:8px 12px;border:1px solid var(--gris2);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;background:white;color:var(--txt);outline:none;transition:border .15s;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--verde3);box-shadow:0 0 0 3px rgba(82,183,136,.12)}
+.field textarea{resize:vertical;min-height:68px}
+.field .hint{font-size:11px;color:var(--txt3)}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.modal-bg.open{display:flex}
+.modal{background:white;border-radius:14px;padding:26px;width:100%;max-width:560px;margin:auto}
+.modal h3{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:18px;color:var(--verde)}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--gris2)}
+
+/* MISC */
+.empty{text-align:center;padding:40px;color:var(--txt3)}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:.35}
+.alert-row{display:flex;align-items:flex-start;gap:10px;padding:11px;background:var(--gris);border-radius:8px;margin-bottom:8px}
+.alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.lote-row{display:flex;align-items:center;gap:12px;padding:12px;background:var(--gris);border-radius:8px;margin-bottom:8px}
+.lote-color{width:5px;height:40px;border-radius:3px;flex-shrink:0}
+.chip-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--gris2);background:white;color:var(--txt2);transition:all .15s}
+.chip.active{background:var(--verde);color:white;border-color:var(--verde)}
+.search-bar{width:100%;padding:9px 14px;border:1px solid var(--gris2);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;margin-bottom:12px;outline:none}
+.search-bar:focus{border-color:var(--verde3)}
+.step-row{display:flex;align-items:flex-start;gap:12px;padding:13px;border-radius:8px;border:1px solid var(--gris2);margin-bottom:9px;cursor:pointer;transition:background .15s}
+.step-row:hover{background:var(--verde-claro);border-color:var(--verde3)}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--verde);color:white;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;flex-shrink:0;margin-top:1px}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--verde);color:white;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;z-index:999;opacity:0;transform:translateY(8px);transition:all .28s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.back-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--txt3);cursor:pointer;margin-bottom:14px;padding:5px 0}
+.back-btn:hover{color:var(--verde)}
+.ficha-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gris2);font-size:13px}
+.ficha-row:last-child{border-bottom:none}
+.ficha-key{color:var(--txt3)}.ficha-val{font-weight:500;text-align:right}
+.import-box{border:2px dashed var(--gris2);border-radius:10px;padding:22px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:10px}
+.import-box:hover{border-color:var(--verde3);background:var(--verde-claro)}
+.code-block{background:var(--gris);border-radius:6px;padding:9px 12px;font-size:11px;font-family:monospace;color:var(--txt2);margin-bottom:10px;border:1px solid var(--gris2);line-height:1.9}
+/* Mapa */
+#mapa-lotes{height:500px;border-radius:var(--radius);border:1px solid var(--gris2);margin-bottom:14px;z-index:1}
+.mapa-barra{background:white;border:1px solid var(--gris2);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.mapa-sep{width:1px;height:22px;background:var(--gris2);margin:0 3px;flex-shrink:0}
+.leyenda-barra{display:flex;height:16px;border-radius:4px;overflow:hidden;margin-bottom:4px}
+.leyenda-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--txt3)}
+.info-capa{background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#78350f;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="topbar">
+  <div class="topbar-logo">Campo<span>IO</span></div>
+  <div class="topbar-est" id="btn-estancia" onclick="openModal('modal-estancia')">🌿 Mi establecimiento ▾</div>
+  <span style="font-size:11px;opacity:.5">v1.1</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('inicio')">Inicio</div>
+  <div class="tab" onclick="switchTab('ganado')">Ganado</div>
+  <div class="tab" onclick="switchTab('lotes')">Lotes</div>
+  <div class="tab" onclick="switchTab('cultivos')">Cultivos</div>
+  <div class="tab" onclick="switchTab('pesajes')">Pesajes</div>
+  <div class="tab" onclick="switchTab('sanidad')">Sanidad</div>
+  <div class="tab" onclick="switchTab('importar')">Importar</div>
+  <div class="tab" onclick="switchTab('mercado')">💰 Mercado</div>
+</div>
+
+<div class="content">
+
+<!-- INICIO -->
+<div id="screen-inicio" class="screen active">
+
+  <!-- Ticker dólar -->
+  <div id="dolar-ticker" style="background:var(--verde);color:white;border-radius:var(--radius);padding:10px 16px;margin-bottom:14px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:600;opacity:0.7;white-space:nowrap">COTIZACIÓN HOY</span>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;flex:1" id="dolar-values">
+      <span style="font-size:12px;opacity:0.6">Cargando cotización...</span>
+    </div>
+    <span style="font-size:10px;opacity:0.5" id="dolar-hora"></span>
+  </div>
+
+  <div class="grid4">
+    <div class="card" style="padding:14px"><div class="stat-num" id="s-animales">0</div><div class="stat-lbl">Animales</div><div class="stat-sub" id="s-animales-sub">—</div></div>
+    <div class="card" style="padding:14px"><div class="stat-num" id="s-lotes">0</div><div class="stat-lbl">Lotes</div><div class="stat-sub" id="s-lotes-sub">0 ha</div></div>
+    <div class="card" style="padding:14px"><div class="stat-num" id="s-cultivos">0</div><div class="stat-lbl">Cultivos</div><div class="stat-sub">Esta campaña</div></div>
+    <div class="card" style="padding:14px"><div class="stat-num" id="s-pesajes">0</div><div class="stat-lbl">Pesajes</div><div class="stat-sub">Total</div></div>
+  </div>
+  <div class="card">
+    <div class="sec-title">Alertas</div>
+    <div id="alertas-cont"></div>
+  </div>
+  <!-- Pasos: solo se muestran si no hay datos cargados -->
+  <div class="card" id="card-pasos">
+    <div class="sec-title">¿Por dónde empezar?</div>
+    <div class="step-row" onclick="openModal('modal-config-campo')"><div class="step-num">1</div><div><div style="font-weight:500;font-size:13px">Configurar ubicación del campo</div><div style="font-size:12px;color:var(--txt3)">Ingresá las coordenadas del casco para centrar el mapa en tu campo</div></div></div>
+    <div class="step-row" onclick="openModal('modal-estancia')"><div class="step-num">2</div><div><div style="font-weight:500;font-size:13px">Datos del establecimiento</div><div style="font-size:12px;color:var(--txt3)">Nombre, RENSPA, provincia, hectáreas</div></div></div>
+    <div class="step-row" onclick="switchTab('lotes')"><div class="step-num">3</div><div><div style="font-weight:500;font-size:13px">Dibujar lotes en el mapa</div><div style="font-size:12px;color:var(--txt3)">Usá el mapa satelital para delimitar cada potrero</div></div></div>
+    <div class="step-row" onclick="switchTab('importar')"><div class="step-num">4</div><div><div style="font-weight:500;font-size:13px">Importar animales desde CSV</div><div style="font-size:12px;color:var(--txt3)">Descargá la plantilla, completala y subila</div></div></div>
+  </div>
+</div>
+
+<!-- GANADO -->
+<div id="screen-ganado" class="screen">
+  <div id="vista-lista">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div><h2 style="font-size:18px">Rodeo</h2><p style="font-size:12px;color:var(--txt3)" id="ganado-count">0 animales</p></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="openModal('modal-imp-ganado')">↑ CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportarCSV('animales')">↓ Exportar</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-animal')">+ Nuevo animal</button>
+      </div>
+    </div>
+    <input class="search-bar" placeholder="Buscar caravana, raza, lote..." oninput="buscarGanado(this.value)">
+    <div class="chip-row" id="filtros-cat">
+      <div class="chip active" data-cat="todos">Todos</div>
+      <div class="chip" data-cat="Vaca">Vacas</div>
+      <div class="chip" data-cat="Toro">Toros</div>
+      <div class="chip" data-cat="Ternero">Terneros</div>
+      <div class="chip" data-cat="Ternera">Terneras</div>
+      <div class="chip" data-cat="Novillo">Novillos</div>
+      <div class="chip" data-cat="Vaquillona">Vaquillonas</div>
+    </div>
+    <div class="card" style="padding:0"><div class="table-wrap">
+      <table><thead><tr><th>Caravana</th><th>Categoría</th><th>Raza</th><th>Sexo</th><th>Peso kg</th><th>Lote</th><th>Estado</th><th>Nacimiento</th><th></th></tr></thead>
+      <tbody id="tbody-ganado"></tbody></table>
+    </div></div>
+  </div>
+  <div id="vista-ficha" style="display:none">
+    <div class="back-btn" onclick="volverLista()">← Volver al rodeo</div>
+    <div id="cont-ficha"></div>
+  </div>
+</div>
+
+<!-- LOTES -->
+<div id="screen-lotes" class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div><h2 style="font-size:18px">Lotes del campo</h2><p style="font-size:12px;color:var(--txt3)" id="lotes-count">0 lotes</p></div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="openModal('modal-config-campo')">⚙ Configurar campo</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-lote-manual')">+ Lote sin mapa</button>
+    </div>
+  </div>
+
+  <!-- Barra de capas -->
+  <div class="mapa-barra">
+    <span style="font-size:11px;font-weight:600;color:var(--txt3)">MAPA:</span>
+    <button class="layer-btn active-osm" id="btn-osm" onclick="setBase('osm')">🗺 Callejero</button>
+    <button class="layer-btn" id="btn-sat" onclick="setBase('sat')">🛰 Satélite</button>
+    <button class="layer-btn" id="btn-goog" onclick="setBase('goog')">🌍 Google</button>
+    <div class="mapa-sep"></div>
+    <span style="font-size:11px;font-weight:600;color:var(--txt3)">NASA GIBS (gratis):</span>
+    <button class="layer-btn" id="btn-ndvi"  onclick="toggleCop('ndvi')">🌿 NDVI</button>
+    <button class="layer-btn" id="btn-rgb"   onclick="toggleCop('rgb')">📷 RGB</button>
+    <button class="layer-btn" id="btn-falso" onclick="toggleCop('falso')">🔴 Falso color</button>
+    <button class="layer-btn" id="btn-ign"   onclick="toggleCop('ign')">🇦🇷 IGN Argentina</button>
+    <button class="layer-btn" id="btn-copoff" onclick="quitarCop()">✕ Quitar capa</button>
+    <div class="mapa-sep"></div>
+    <label style="font-size:11px;color:var(--txt3)">Fecha:</label>
+    <input type="date" id="fecha-cop" style="font-size:12px;padding:4px 8px;border:1px solid var(--gris2);border-radius:6px;font-family:'DM Sans',sans-serif" onchange="if(copActivo)toggleCop(copActivo)">
+  </div>
+
+  <!-- Info capa activa + link Copernicus -->
+  <div class="info-capa" id="info-capa" style="display:none">
+    <span id="info-capa-txt"></span>
+    <a id="link-cop" href="#" target="_blank" style="color:var(--azul);font-weight:500;white-space:nowrap">🌍 Abrir en NASA Worldview →</a>
+  </div>
+
+  <!-- Instrucción -->
+  <div style="background:#e8f5ee;border:1px solid #b7e4c7;border-radius:8px;padding:9px 14px;margin-bottom:10px;font-size:12px;color:#1b4332">
+    ℹ️ <strong>Dibujar lote:</strong> usá el ícono de polígono (◻) en la barra izquierda del mapa → dibujá haciendo clics → doble clic para cerrar → se abre el formulario. Clic en un lote para ver su info. <strong>Necesitás internet.</strong>
+  </div>
+
+  <div id="mapa-lotes"></div>
+
+  <!-- Leyenda Copernicus -->
+  <div id="leyenda-div" class="card" style="display:none;padding:14px;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px" id="leyenda-titulo"></div>
+    <div class="leyenda-barra" id="leyenda-barra"></div>
+    <div class="leyenda-labels" id="leyenda-labels"></div>
+    <p style="font-size:11px;color:var(--txt3);margin-top:6px" id="leyenda-desc"></p>
+  </div>
+
+  <div class="sec-title">Lotes registrados</div>
+  <div id="lista-lotes"></div>
+</div>
+
+<!-- CULTIVOS -->
+<div id="screen-cultivos" class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div><h2 style="font-size:18px">Cultivos</h2><p style="font-size:12px;color:var(--txt3)" id="cultivos-count">0 registros</p></div>
+    <div style="display:flex;gap:7px">
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSV('cultivos')">↓ Exportar</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-cultivo')">+ Nuevo cultivo</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0"><div class="table-wrap">
+    <table><thead><tr><th>Cultivo</th><th>Lote</th><th>Híbrido/Variedad</th><th>Siembra</th><th>Hectáreas</th><th>Estado</th><th>Campaña</th><th></th></tr></thead>
+    <tbody id="tbody-cultivos"></tbody></table>
+  </div></div>
+</div>
+
+<!-- PESAJES -->
+<div id="screen-pesajes" class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div><h2 style="font-size:18px">Pesajes</h2><p style="font-size:12px;color:var(--txt3)">Balanza y dron GanaderIA</p></div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="openModal('modal-imp-pesajes')">↑ GanaderIA</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSV('pesajes')">↓ Exportar</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-pesaje')">+ Pesaje manual</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0"><div class="table-wrap">
+    <table><thead><tr><th>Fecha</th><th>Caravana</th><th>Lote</th><th>Peso kg</th><th>Gan. diaria</th><th>Método</th><th>Notas</th></tr></thead>
+    <tbody id="tbody-pesajes"></tbody></table>
+  </div></div>
+</div>
+
+<!-- SANIDAD -->
+<div id="screen-sanidad" class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div><h2 style="font-size:18px">Sanidad</h2><p style="font-size:12px;color:var(--txt3)">Vacunaciones, tratamientos y eventos</p></div>
+    <div style="display:flex;gap:7px">
+      <button class="btn btn-secondary btn-sm" onclick="exportarCSV('sanidad')">↓ Exportar</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-sanidad')">+ Evento sanitario</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0"><div class="table-wrap">
+    <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Animal/Lote</th><th>Producto</th><th>Dosis</th><th>Próximo</th><th>Estado</th><th></th></tr></thead>
+    <tbody id="tbody-sanidad"></tbody></table>
+  </div></div>
+</div>
+
+<!-- IMPORTAR -->
+<div id="screen-importar" class="screen">
+  <h2 style="font-size:18px;margin-bottom:5px">Importar y exportar datos</h2>
+  <p style="font-size:13px;color:var(--txt3);margin-bottom:18px">Cargá datos masivamente desde CSV o archivos de GanaderIA</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">📋 Animales — CSV</div>
+      <div class="code-block">caravana, caravana_electronica,<br>categoria, raza, sexo, peso_kg,<br>fecha_nacimiento, lote, estado,<br>madre, padre, notas</div>
+      <button class="btn btn-secondary btn-sm" onclick="dlPlantilla('animales')" style="margin-bottom:10px">↓ Plantilla CSV</button>
+      <div class="import-box" onclick="document.getElementById('f-animales').click()">
+        <div style="font-size:28px;margin-bottom:6px">📂</div>
+        <p style="font-size:13px;color:var(--txt3)">Clic para seleccionar CSV</p>
+        <input id="f-animales" type="file" accept=".csv,.txt" style="display:none" onchange="importGanado(this)">
+      </div>
+      <div id="r-animales" style="font-size:12px;min-height:18px"></div>
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">🚁 Pesajes — GanaderIA</div>
+      <div class="code-block">animal_id, peso_estimado,<br>confianza, fecha, lote</div>
+      <button class="btn btn-secondary btn-sm" onclick="dlPlantilla('pesajes')" style="margin-bottom:10px">↓ Plantilla CSV</button>
+      <div class="import-box" onclick="document.getElementById('f-pesajes').click()">
+        <div style="font-size:28px;margin-bottom:6px">🚁</div>
+        <p style="font-size:13px;color:var(--txt3)">Excel/CSV de GanaderIA</p>
+        <input id="f-pesajes" type="file" accept=".csv,.txt" style="display:none" onchange="importPesajes(this)">
+      </div>
+      <div id="r-pesajes" style="font-size:12px;min-height:18px"></div>
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">🗺 Lotes — GeoJSON (QGIS)</div>
+      <div class="code-block">QGIS → clic derecho capa<br>→ Exportar → GeoJSON<br>→ EPSG:4326</div>
+      <div class="import-box" onclick="document.getElementById('f-geojson').click()">
+        <div style="font-size:28px;margin-bottom:6px">🌍</div>
+        <p style="font-size:13px;color:var(--txt3)">Subir GeoJSON de QGIS</p>
+        <input id="f-geojson" type="file" accept=".geojson,.json" style="display:none" onchange="importGeoJSON(this)">
+      </div>
+      <div id="r-geojson" style="font-size:12px;min-height:18px"></div>
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">📤 Exportar todo</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-secondary" onclick="exportarCSV('animales')">↓ animales.csv</button>
+        <button class="btn btn-secondary" onclick="exportarCSV('pesajes')">↓ pesajes.csv</button>
+        <button class="btn btn-secondary" onclick="exportarCSV('cultivos')">↓ cultivos.csv</button>
+        <button class="btn btn-secondary" onclick="exportarCSV('sanidad')">↓ sanidad.csv</button>
+        <button class="btn btn-primary" onclick="exportarBackup()">↓ Backup completo JSON</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end importar -->
+
+<!-- MERCADO — dentro del content -->
+<div id="screen-mercado" class="screen">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:8px">
+    <div><h2 style="font-size:18px">Análisis de mercado ganadero</h2><p style="font-size:12px;color:var(--txt3)">Feedlot · Maquila · Reposición — Entre Ríos, mayo 2026</p></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:6px;background:var(--gris);border-radius:20px;padding:4px 12px;border:1px solid var(--gris2)">
+        <span style="font-size:12px;font-weight:500;color:var(--txt2)">USD</span>
+        <label style="position:relative;width:36px;height:20px;cursor:pointer">
+          <input type="checkbox" id="toggle-moneda" style="opacity:0;width:100%;height:100%;position:absolute;cursor:pointer;margin:0" onchange="recalcular()">
+          <span id="track-moneda" style="position:absolute;inset:0;background:var(--gris2);border-radius:10px;transition:background .2s"></span>
+          <span id="thumb-moneda" style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:white;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>
+        </label>
+        <span style="font-size:12px;font-weight:500;color:var(--txt2)">ARS</span>
+      </div>
+      <span id="tc-display" style="font-size:11px;color:var(--txt3)">TC: $—</span>
+      <button class="btn btn-secondary btn-sm" onclick="openModal('modal-precios')">✏ Actualizar precios</button>
+    </div>
+  </div>
+
+  <!-- Alerta spread invertido -->
+  <div id="alerta-spread" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:13px;color:#7f1d1d;display:flex;gap:10px;align-items:center">
+    <span style="font-size:20px">⚠</span>
+    <div><strong>Spread invertido activo:</strong> el ternero vale más por kg que el gordo. Comprar para feedlot <strong>no cierra</strong> con los precios actuales.</div>
+  </div>
+
+  <!-- KPIs precios -->
+  <div class="grid4" id="kpis-precios">
+    <div class="card" style="padding:14px;border-left:3px solid #c0392b">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Ternero 150–180 kg</div>
+      <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:#c0392b" id="kpi-t1">US$ 4,40</div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">por kg · RÉCORD HISTÓRICO</div>
+    </div>
+    <div class="card" style="padding:14px;border-left:3px solid #d4820a">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Ternero 130–150 kg remate</div>
+      <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:#d4820a" id="kpi-t2">US$ 4,81</div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">por kg</div>
+    </div>
+    <div class="card" style="padding:14px;border-left:3px solid var(--verde)">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Gordo liviano 220 kg</div>
+      <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:var(--verde)" id="kpi-g1">US$ 3,59</div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">por kg</div>
+    </div>
+    <div class="card" style="padding:14px;border-left:3px solid var(--azul)">
+      <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Novillo gordo 280–300 kg</div>
+      <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:var(--azul)" id="kpi-g2">US$ 3,75</div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">por kg</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <!-- Parámetros propios -->
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">⚙ Tus parámetros</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <label style="font-size:12px;font-weight:500;color:var(--txt2)">Costo maíz propio (US$/tn)</label>
+            <span style="font-size:13px;font-weight:600;color:var(--verde)" id="lbl-maiz">100</span>
+          </div>
+          <input type="range" id="sl-maiz" min="60" max="180" value="100" style="width:100%" oninput="recalcular()">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--txt3)"><span>US$60 (propio)</span><span>US$175 (mercado)</span></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <label style="font-size:12px;font-weight:500;color:var(--txt2)">Conversión (kg MS / kg ganado)</label>
+            <span style="font-size:13px;font-weight:600;color:var(--verde)" id="lbl-conv">5.5</span>
+          </div>
+          <input type="range" id="sl-conv" min="4" max="8" step="0.1" value="5.5" style="width:100%" oninput="recalcular()">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--txt3)"><span>4 (óptimo)</span><span>8 (malo)</span></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <label style="font-size:12px;font-weight:500;color:var(--txt2)">Tarifa maquila (US$/kg ganado)</label>
+            <span style="font-size:13px;font-weight:600;color:var(--verde)" id="lbl-tarifa">0.65</span>
+          </div>
+          <input type="range" id="sl-tarifa" min="0.40" max="0.90" step="0.01" value="0.65" style="width:100%" oninput="recalcular()">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--txt3)"><span>US$0,40</span><span>US$0,90</span></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <label style="font-size:12px;font-weight:500;color:var(--txt2)">Animales en maquila (cabezas)</label>
+            <span style="font-size:13px;font-weight:600;color:var(--verde)" id="lbl-cab">150</span>
+          </div>
+          <input type="range" id="sl-cab" min="50" max="500" step="10" value="150" style="width:100%" oninput="recalcular()">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--txt3)"><span>50</span><span>500</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Semáforo de conveniencia -->
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">🚦 Semáforo de conveniencia</div>
+      <div style="display:flex;flex-direction:column;gap:10px" id="semaforo">
+        <!-- renderizado por JS -->
+      </div>
+      <div style="margin-top:14px;padding:10px;background:var(--gris);border-radius:8px;font-size:12px;color:var(--txt2)" id="analisis-auto"></div>
+    </div>
+  </div>
+
+  <!-- Comparador de escenarios -->
+  <div class="card">
+    <div class="sec-title" style="font-size:14px">📊 Comparador de escenarios (US$ / animal)</div>
+    <div style="overflow-x:auto">
+      <table style="min-width:560px">
+        <thead>
+          <tr>
+            <th style="width:35%">Escenario</th>
+            <th style="text-align:right">Ingreso</th>
+            <th style="text-align:right">Costos</th>
+            <th style="text-align:right">Margen bruto</th>
+            <th style="text-align:center">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-escenarios"></tbody>
+      </table>
+    </div>
+    <!-- Barras visuales -->
+    <div style="margin-top:16px" id="barras-escenarios"></div>
+  </div>
+
+  <!-- Módulo Maquila -->
+  <div class="card" style="background:linear-gradient(135deg,#e8f5ee 0%,#f7f5f0 100%)">
+    <div class="sec-title" style="font-size:14px">🏗 Calculadora de maquila — tu mejor opción hoy</div>
+    <div class="grid3" id="kpis-maquila" style="margin-bottom:12px"></div>
+    <div style="font-size:12px;color:var(--txt2);background:white;border-radius:8px;padding:12px;border:1px solid var(--gris2)">
+      <strong style="display:block;margin-bottom:6px">Cláusulas clave del contrato de maquila</strong>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
+        <div>• Precio maíz indexado a pizarra Rosario</div>
+        <div>• Mortandad hasta 1,5%: riesgo del prestador</div>
+        <div>• Garantía: cheques diferidos al ingreso de tropa</div>
+        <div>• Liquidación quincenal (hotelería + alimento)</div>
+        <div>• Sanidad ingreso: cobro fijo por tropa (~$20.000)</div>
+        <div>• Ciclos anuales estimados: 2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicadores clave -->
+  <div class="card">
+    <div class="sec-title" style="font-size:14px">📈 Indicadores clave del mercado</div>
+    <div class="grid3">
+      <div style="text-align:center;padding:12px;background:var(--gris);border-radius:8px">
+        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:#c0392b" id="ind-spread">−US$ 1,22</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:4px">Spread ternero → gordo (por kg)</div>
+        <div style="font-size:11px;color:#c0392b;margin-top:2px">Invertido ← comprar NO cierra</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--gris);border-radius:8px">
+        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:var(--naranja)" id="ind-relacion">25 kg</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:4px">Relación ternero / maíz</div>
+        <div style="font-size:11px;color:var(--naranja);margin-top:2px">Histórico: 18 kg · Favorable al criador</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--gris);border-radius:8px">
+        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:var(--verde)" id="ind-ventaja">US$75/tn</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:4px">Ventaja maíz propio vs mercado</div>
+        <div style="font-size:11px;color:var(--verde);margin-top:2px">Cambia el negocio en todos los escenarios</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRÁFICOS HISTÓRICOS -->
+  <div class="card">
+    <div class="sec-title" style="font-size:14px">
+      📈 Histórico de precios
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" id="btn-chart-ternero" onclick="setChart('ternero')" style="background:var(--verde);color:white;border:none;font-size:11px">Ternero</button>
+        <button class="btn btn-sm" id="btn-chart-gordo" onclick="setChart('gordo')" style="background:var(--gris);border:1px solid var(--gris2);font-size:11px">Gordo</button>
+        <button class="btn btn-sm" id="btn-chart-maiz" onclick="setChart('maiz')" style="background:var(--gris);border:1px solid var(--gris2);font-size:11px">Maíz</button>
+        <button class="btn btn-sm" id="btn-chart-spread" onclick="setChart('spread')" style="background:var(--gris);border:1px solid var(--gris2);font-size:11px">Spread</button>
+      </div>
+    </div>
+    <canvas id="chart-precios" style="width:100%;height:240px;max-height:240px"></canvas>
+    <p style="font-size:11px;color:var(--txt3);margin-top:8px" id="chart-desc">Precio del ternero de invernada (US$/kg) · Mercado Liniers + Rosgan. Podés agregar puntos propios desde "Actualizar precios".</p>
+  </div>
+
+  <!-- Mini tabla de registros propios -->
+  <div class="card">
+    <div class="sec-title" style="font-size:14px">📋 Mis registros de precio <button class="btn btn-primary btn-sm" onclick="openModal('modal-precio-registro')">+ Agregar</button></div>
+    <div id="tabla-registros-wrap">
+      <div class="empty" style="padding:20px"><p style="font-size:13px">Agregá tus propios registros de precios para ver la evolución en el gráfico.</p></div>
+    </div>
+  </div>
+
+</div><!-- /screen-mercado -->
+
+</div><!-- /content -->
+</div><!-- /app -->
+
+<!-- Modal actualizar precios -->
+<div id="modal-precios" class="modal-bg">
+<div class="modal">
+  <h3>✏ Actualizar precios de referencia</h3>
+  <p style="font-size:12px;color:var(--txt3);margin-bottom:14px">Actualizá los precios del mercado cuando cambien. Se guardan en tu app.</p>
+  <div class="form-row">
+    <div class="field"><label>Ternero 150–180 kg (US$/kg)</label><input id="pr-t1" type="number" step="0.01" placeholder="4.40"></div>
+    <div class="field"><label>Ternero 130–150 kg remate (US$/kg)</label><input id="pr-t2" type="number" step="0.01" placeholder="4.81"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Gordo liviano 220 kg (US$/kg)</label><input id="pr-g1" type="number" step="0.01" placeholder="3.59"></div>
+    <div class="field"><label>Novillo gordo 280–300 kg (US$/kg)</label><input id="pr-g2" type="number" step="0.01" placeholder="3.75"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Maíz mercado Rosario (US$/tn)</label><input id="pr-maiz-mdo" type="number" step="1" placeholder="175"></div>
+    <div class="field"><label>Tipo de cambio libre (ARS/USD)</label><input id="pr-tc" type="number" step="1" placeholder="1450"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-precios')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarPrecios()">Guardar y recalcular</button>
+  </div>
+</div>
+</div>
+
+<!-- Modal agregar registro de precio -->
+<div id="modal-precio-registro" class="modal-bg">
+<div class="modal">
+  <h3>+ Agregar registro de precio</h3>
+  <p style="font-size:12px;color:var(--txt3);margin-bottom:14px">Registrá los precios que observás en remates, pizarras o negociaciones directas.</p>
+  <div class="form-row">
+    <div class="field"><label>Fecha *</label><input id="reg-fecha" type="date"></div>
+    <div class="field"><label>Categoría *</label><select id="reg-cat"><option>Ternero 150–180 kg</option><option>Ternero 130–150 kg</option><option>Gordo liviano 220 kg</option><option>Novillo gordo 280 kg</option><option>Maíz (US$/tn)</option><option>Spread ternero-gordo</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Precio (US$/kg o US$/tn) *</label><input id="reg-precio" type="number" step="0.01" placeholder="Ej: 4.40"></div>
+    <div class="field"><label>Fuente</label><input id="reg-fuente" placeholder="Ej: Rosgan, Liniers, directo..."></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><input id="reg-notas" placeholder="Observaciones adicionales"></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-precio-registro')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarRegistroPrecio()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- ===== MODALES ===== -->
+<div class="modal">
+  <h3>⚙ Configurar ubicación del campo</h3>
+  <p style="font-size:13px;color:var(--txt3);margin-bottom:16px">Ingresá las coordenadas del casco principal para que el mapa abra centrado en tu campo.</p>
+  <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#78350f">
+    <strong>¿Cómo obtener las coordenadas?</strong><br>
+    Google Maps → navegá a tu casco → clic derecho → aparecen lat/lng arriba del menú. <br>O desde Copernicus Browser → la URL muestra <code>&lat=...&lng=...</code>.<br>
+    Tu campo: aproximadamente <strong>lat -31.74154 / lng -58.8444</strong>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Latitud *</label><input id="cfg-lat" type="number" step="0.00001" placeholder="-31.74154"><div class="hint">Negativo = Sur</div></div>
+    <div class="field"><label>Longitud *</label><input id="cfg-lng" type="number" step="0.00001" placeholder="-58.8444"><div class="hint">Negativo = Oeste</div></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Nombre del casco</label><input id="cfg-nombre" placeholder="Ej: Casco La Cruz Escondida"></div>
+    <div class="field"><label>Zoom inicial</label>
+      <select id="cfg-zoom">
+        <option value="12">Lejano (+5000 ha)</option>
+        <option value="13" selected>Normal (1000–5000 ha)</option>
+        <option value="14">Cercano (100–1000 ha)</option>
+        <option value="15">Muy cercano (&lt;100 ha)</option>
+        <option value="16">Máximo detalle</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-config-campo')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarConfigCampo()">Guardar y centrar mapa</button>
+  </div>
+</div>
+</div>
+
+<!-- Lote desde mapa -->
+<div id="modal-lote-mapa" class="modal-bg">
+<div class="modal">
+  <h3>Nuevo lote — desde el mapa</h3>
+  <div class="form-row">
+    <div class="field"><label>Nombre *</label><input id="lm-nombre" placeholder="Ej: Lote Norte 1"></div>
+    <div class="field"><label>Hectáreas (calculadas)</label><input id="lm-ha" type="number" readonly style="background:var(--gris)"></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Tipo</label><select id="lm-tipo"><option>Agrícola</option><option>Ganadero</option><option>Mixto</option><option>Monte/Bosque</option><option>Sin uso</option></select></div>
+    <div class="field"><label>Suelo</label><select id="lm-suelo"><option>Franco arcilloso</option><option>Franco limoso</option><option>Arcilloso</option><option>Arenoso</option><option>Franco</option><option>Vertisol</option></select></div>
+    <div class="field"><label>Color</label><select id="lm-color"><option value="#52b788">Verde oscuro</option><option value="#74c69d">Verde claro</option><option value="#f9c74f">Amarillo</option><option value="#1a5c8b">Azul</option><option value="#d4820a">Naranja</option><option value="#9b59b6">Violeta</option></select></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><textarea id="lm-notas" placeholder="Características, limitaciones..."></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="cancelarLoteMapa()">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarLoteMapa()">Guardar lote</button>
+  </div>
+</div>
+</div>
+
+<!-- Lote manual (sin mapa) -->
+<div id="modal-lote-manual" class="modal-bg">
+<div class="modal">
+  <h3>Nuevo lote — sin dibujar</h3>
+  <div class="form-row">
+    <div class="field"><label>Nombre *</label><input id="lman-nombre" placeholder="Ej: Lote Sur"></div>
+    <div class="field"><label>Hectáreas</label><input id="lman-ha" type="number" placeholder="320"></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Tipo</label><select id="lman-tipo"><option>Agrícola</option><option>Ganadero</option><option>Mixto</option><option>Monte/Bosque</option><option>Sin uso</option></select></div>
+    <div class="field"><label>Suelo</label><select id="lman-suelo"><option>Franco arcilloso</option><option>Franco limoso</option><option>Arcilloso</option><option>Arenoso</option><option>Franco</option><option>Vertisol</option></select></div>
+    <div class="field"><label>Color</label><select id="lman-color"><option value="#52b788">Verde oscuro</option><option value="#74c69d">Verde claro</option><option value="#f9c74f">Amarillo</option><option value="#1a5c8b">Azul</option><option value="#d4820a">Naranja</option><option value="#9b59b6">Violeta</option></select></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><textarea id="lman-notas"></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-lote-manual')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarLoteManual()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- Animal -->
+<div id="modal-animal" class="modal-bg">
+<div class="modal">
+  <h3>Nuevo animal</h3>
+  <div class="form-row">
+    <div class="field"><label>Caravana visual *</label><input id="a-car" placeholder="0342"></div>
+    <div class="field"><label>Caravana electrónica</label><input id="a-care" placeholder="982 000 411 342"></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Categoría</label><select id="a-cat"><option>Vaca</option><option>Toro</option><option>Ternero</option><option>Ternera</option><option>Novillo</option><option>Vaquillona</option></select></div>
+    <div class="field"><label>Sexo</label><select id="a-sex"><option>Hembra</option><option>Macho</option></select></div>
+    <div class="field"><label>Raza</label><select id="a-raza"><option>Aberdeen Angus</option><option>Hereford</option><option>Braford</option><option>Brangus</option><option>Shorthorn</option><option>Limousin</option><option>Simmental</option><option>Nelore</option><option>Cruza</option><option>Otro</option></select></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Peso (kg)</label><input id="a-peso" type="number" placeholder="380"></div>
+    <div class="field"><label>Fecha nacimiento</label><input id="a-nac" type="date"></div>
+    <div class="field"><label>Lote</label><select id="a-lote"><option value="">Sin asignar</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Estado reproductivo</label><select id="a-estado"><option>Normal</option><option>Gestante</option><option>Servicio</option><option>Seca</option><option>Vacía</option><option>Descarte</option></select></div>
+    <div class="field"><label>Madre (caravana)</label><input id="a-madre" placeholder="Opcional"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Padre</label><input id="a-padre" placeholder="Opcional"></div>
+    <div class="field"><label>Procedencia</label><input id="a-proc" placeholder="Propio / Comprado a..."></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><textarea id="a-notas"></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-animal')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarAnimal()">Guardar animal</button>
+  </div>
+</div>
+</div>
+
+<!-- Cultivo -->
+<div id="modal-cultivo" class="modal-bg">
+<div class="modal">
+  <h3>Nuevo cultivo</h3>
+  <div class="form-row">
+    <div class="field"><label>Cultivo</label><select id="c-cult"><option>Soja</option><option>Maíz</option><option>Trigo</option><option>Girasol</option><option>Sorgo</option><option>Cebada</option><option>Pastura</option><option>Avena</option><option>Arroz</option><option>Otro</option></select></div>
+    <div class="field"><label>Lote</label><select id="c-lote"><option value="">Seleccionar...</option></select></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Híbrido/Variedad</label><input id="c-var" placeholder="DM 4612 RR"></div>
+    <div class="field"><label>Fecha siembra</label><input id="c-siem" type="date"></div>
+    <div class="field"><label>Hectáreas</label><input id="c-ha" type="number"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Estado fenológico</label><input id="c-estado" placeholder="V6, R1, espigazón..."></div>
+    <div class="field"><label>Campaña</label><input id="c-camp" placeholder="25/26"></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><textarea id="c-notas"></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-cultivo')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarCultivo()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- Pesaje -->
+<div id="modal-pesaje" class="modal-bg">
+<div class="modal">
+  <h3>Registrar pesaje</h3>
+  <div class="form-row">
+    <div class="field"><label>Caravana *</label><input id="p-car" placeholder="0342" list="dl-cars"><datalist id="dl-cars"></datalist></div>
+    <div class="field"><label>Fecha *</label><input id="p-fecha" type="date"></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Peso (kg) *</label><input id="p-peso" type="number" placeholder="387"></div>
+    <div class="field"><label>Lote</label><select id="p-lote"><option value="">—</option></select></div>
+    <div class="field"><label>Método</label><select id="p-met"><option>Balanza</option><option>Dron / GanaderIA</option><option>Estimación visual</option><option>Cinta torácica</option></select></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><textarea id="p-notas"></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-pesaje')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarPesaje()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- Sanidad -->
+<div id="modal-sanidad" class="modal-bg">
+<div class="modal">
+  <h3>Evento sanitario</h3>
+  <div class="form-row">
+    <div class="field"><label>Tipo *</label><select id="s-tipo"><option>Vacunación aftosa</option><option>Vacunación brucelosis</option><option>Vacunación carbunclo</option><option>Vacunación IBR/DVB</option><option>Desparasitación interna</option><option>Desparasitación externa</option><option>Baño garrapaticida</option><option>Tacto reproductivo</option><option>Tratamiento individual</option><option>Otro</option></select></div>
+    <div class="field"><label>Fecha *</label><input id="s-fecha" type="date"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Caravana (vacío = todo el lote)</label><input id="s-car" placeholder="0342 (opcional)" list="dl-cars2"><datalist id="dl-cars2"></datalist></div>
+    <div class="field"><label>Lote</label><select id="s-lote"><option value="">Individual</option></select></div>
+  </div>
+  <div class="form-row c3">
+    <div class="field"><label>Producto</label><input id="s-prod" placeholder="Aftosa A+O, Ivomec..."></div>
+    <div class="field"><label>Dosis</label><input id="s-dosis" placeholder="2 ml/animal"></div>
+    <div class="field"><label>Repetir en días</label><input id="s-prox" type="number" placeholder="180"></div>
+  </div>
+  <div class="form-row c1"><div class="field"><label>Notas</label><textarea id="s-notas"></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-sanidad')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarSanidad()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- Estancia -->
+<div id="modal-estancia" class="modal-bg">
+<div class="modal">
+  <h3>Datos del establecimiento</h3>
+  <div class="form-row c1"><div class="field"><label>Nombre del establecimiento</label><input id="e-nombre" placeholder="Estancia La Cruz Escondida"></div></div>
+  <div class="form-row">
+    <div class="field"><label>Propietario</label><input id="e-dueno"></div>
+    <div class="field"><label>CUIT</label><input id="e-cuit" placeholder="20-12345678-1"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Provincia</label><select id="e-prov"><option>Entre Ríos</option><option>Buenos Aires</option><option>Santa Fe</option><option>Córdoba</option><option>Corrientes</option><option>Chaco</option><option>Santiago del Estero</option><option>Salta</option><option>La Pampa</option><option>Otra</option></select></div>
+    <div class="field"><label>Partido/Departamento</label><input id="e-partido"></div>
+  </div>
+  <div class="form-row">
+    <div class="field"><label>Hectáreas totales</label><input id="e-ha" type="number"></div>
+    <div class="field"><label>RENSPA</label><input id="e-renspa" placeholder="11.001.0.01234/00"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-estancia')">Cancelar</button>
+    <button class="btn btn-primary" onclick="guardarEstancia()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- Importar ganado -->
+<div id="modal-imp-ganado" class="modal-bg">
+<div class="modal">
+  <h3>Importar animales — CSV</h3>
+  <button class="btn btn-secondary btn-sm" onclick="dlPlantilla('animales')" style="margin-bottom:12px">↓ Descargar plantilla</button>
+  <div class="import-box" onclick="document.getElementById('f-ganado-m').click()">
+    <div style="font-size:28px;margin-bottom:6px">📋</div>
+    <p style="font-size:13px;color:var(--txt3)">Clic para subir CSV</p>
+    <input id="f-ganado-m" type="file" accept=".csv,.txt" style="display:none" onchange="importGanado(this);closeModal('modal-imp-ganado')">
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-imp-ganado')">Cerrar</button></div>
+</div>
+</div>
+
+<!-- Importar pesajes GanaderIA -->
+<div id="modal-imp-pesajes" class="modal-bg">
+<div class="modal">
+  <h3>Importar pesajes — GanaderIA</h3>
+  <div class="import-box" onclick="document.getElementById('f-pes-m').click()">
+    <div style="font-size:28px;margin-bottom:6px">🚁</div>
+    <p style="font-size:13px;color:var(--txt3)">Subí el Excel/CSV de GanaderIA</p>
+    <input id="f-pes-m" type="file" accept=".csv,.txt" style="display:none" onchange="importPesajes(this);closeModal('modal-imp-pesajes')">
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-imp-pesajes')">Cerrar</button></div>
+</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// =============================================================
+// BASE DE DATOS
+// =============================================================
+const DB_KEY = 'campioapp_v2';
+let db = { estancia:{nombre:'Mi establecimiento',dueno:'',cuit:'',provincia:'Entre Ríos',partido:'',ha:0,renspa:''}, animales:[], lotes:[], cultivos:[], pesajes:[], sanidad:[] };
+
+function saveDB(){ try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){} }
+function loadDB(){
+  try{ const s=localStorage.getItem(DB_KEY); if(s) db=JSON.parse(s); }catch(e){}
+  // migrar v1 si existe
+  try{
+    const old=localStorage.getItem('campioapp_v1');
+    if(old && !localStorage.getItem(DB_KEY+'_migrated')){
+      const o=JSON.parse(old);
+      ['animales','lotes','cultivos','pesajes','sanidad'].forEach(k=>{ if(o[k]&&o[k].length) db[k]=[...db[k],...o[k]]; });
+      if(o.estancia&&o.estancia.nombre!=='Mi establecimiento') db.estancia=o.estancia;
+      saveDB(); localStorage.setItem(DB_KEY+'_migrated','1');
+    }
+  }catch(e){}
+  renderAll();
+  setToday();
+}
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function setToday(){ const h=new Date().toISOString().slice(0,10); ['p-fecha','s-fecha','fecha-cop'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=h;}); }
+
+// =============================================================
+// NAVEGACIÓN
+// =============================================================
+const TABS = ['inicio','ganado','lotes','cultivos','pesajes','sanidad','importar','mercado'];
+function switchTab(name){
+  TABS.forEach((t,i)=>{ document.querySelectorAll('.tab')[i].classList.toggle('active',t===name); });
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  if(name==='ganado') mostrarLista();
+  if(name==='lotes') setTimeout(()=>{ iniciarMapa(); renderLotesEnMapa(); }, 80);
+  if(name==='mercado'){ recalcular(); setTimeout(()=>{ initChart(); renderRegistros(); }, 100); }
+  renderAll();
+}
+
+// =============================================================
+// MODALES
+// =============================================================
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  poblarSelectsLotes(); poblarDatalistCars();
+  if(id==='modal-estancia'){ const e=db.estancia; ['nombre','dueno','cuit','partido','renspa'].forEach(f=>{ const el=document.getElementById('e-'+f);if(el)el.value=e[f]||''; }); document.getElementById('e-ha').value=e.ha||''; try{document.getElementById('e-prov').value=e.provincia;}catch(ex){} }
+  if(id==='modal-config-campo'){ const c=getCfgCampo(); document.getElementById('cfg-lat').value=c.lat||''; document.getElementById('cfg-lng').value=c.lng||''; document.getElementById('cfg-nombre').value=c.nombre||''; try{document.getElementById('cfg-zoom').value=c.zoom||13;}catch(ex){} }
+}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); }));
+
+function poblarSelectsLotes(){
+  ['a-lote','c-lote','p-lote','s-lote'].forEach(sid=>{
+    const s=document.getElementById(sid); if(!s) return;
+    const first=s.options[0];
+    s.innerHTML=''; s.appendChild(first);
+    db.lotes.forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=l.nombre; s.appendChild(o); });
+  });
+}
+function poblarDatalistCars(){
+  ['dl-cars','dl-cars2'].forEach(id=>{ const dl=document.getElementById(id); if(!dl) return; dl.innerHTML=db.animales.map(a=>`<option value="${a.caravana}">${a.caravana} — ${a.raza}</option>`).join(''); });
+}
+function getLoteNombre(id){ return id?(db.lotes.find(l=>l.id===id)||{}).nombre||'':'' }
+
+// =============================================================
+// GUARDAR DATOS
+// =============================================================
+function guardarAnimal(){
+  const car=document.getElementById('a-car').value.trim();
+  if(!car){toast('Caravana obligatoria','e');return;}
+  const lId=document.getElementById('a-lote').value;
+  db.animales.push({id:uid(),caravana:car,caravanaE:document.getElementById('a-care').value.trim(),categoria:document.getElementById('a-cat').value,sexo:document.getElementById('a-sex').value,raza:document.getElementById('a-raza').value,peso:parseFloat(document.getElementById('a-peso').value)||0,nacimiento:document.getElementById('a-nac').value,lote:getLoteNombre(lId),loteId:lId,estado:document.getElementById('a-estado').value,madre:document.getElementById('a-madre').value.trim(),padre:document.getElementById('a-padre').value.trim(),procedencia:document.getElementById('a-proc').value.trim(),notas:document.getElementById('a-notas').value.trim(),fechaCarga:new Date().toISOString().slice(0,10)});
+  saveDB(); closeModal('modal-animal'); renderAll(); toast('Animal guardado');
+  ['a-car','a-care','a-peso','a-nac','a-madre','a-padre','a-proc','a-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+}
+
+function guardarLoteManual(){
+  const n=document.getElementById('lman-nombre').value.trim();
+  if(!n){toast('Nombre obligatorio','e');return;}
+  db.lotes.push({id:uid(),nombre:n,ha:parseFloat(document.getElementById('lman-ha').value)||0,tipo:document.getElementById('lman-tipo').value,suelo:document.getElementById('lman-suelo').value,color:document.getElementById('lman-color').value,notas:document.getElementById('lman-notas').value.trim(),geojson:null});
+  saveDB(); closeModal('modal-lote-manual'); renderAll(); toast('Lote guardado');
+}
+
+function guardarCultivo(){
+  const lId=document.getElementById('c-lote').value;
+  db.cultivos.push({id:uid(),cultivo:document.getElementById('c-cult').value,loteId:lId,lote:getLoteNombre(lId),variedad:document.getElementById('c-var').value.trim(),siembra:document.getElementById('c-siem').value,ha:parseFloat(document.getElementById('c-ha').value)||0,estado:document.getElementById('c-estado').value.trim(),campaña:document.getElementById('c-camp').value.trim(),notas:document.getElementById('c-notas').value.trim()});
+  saveDB(); closeModal('modal-cultivo'); renderAll(); toast('Cultivo guardado');
+}
+
+function guardarPesaje(){
+  const car=document.getElementById('p-car').value.trim();
+  if(!car){toast('Caravana obligatoria','e');return;}
+  const lId=document.getElementById('p-lote').value;
+  const pesoN=parseFloat(document.getElementById('p-peso').value)||0;
+  const fechaN=document.getElementById('p-fecha').value;
+  let ganancia='';
+  const ant=db.pesajes.filter(p=>p.caravana===car).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
+  if(ant&&ant.peso&&ant.fecha&&fechaN){
+    const dias=Math.max(1,Math.round((new Date(fechaN)-new Date(ant.fecha))/86400000));
+    const g=(pesoN-ant.peso)/dias;
+    if(g>-5&&g<5) ganancia=g.toFixed(3)+' kg/día';
+  }
+  db.pesajes.push({id:uid(),caravana:car,fecha:fechaN,peso:pesoN,lote:getLoteNombre(lId),metodo:document.getElementById('p-met').value,ganancia,notas:document.getElementById('p-notas').value.trim()});
+  saveDB(); closeModal('modal-pesaje'); renderAll(); toast('Pesaje guardado');
+  ['p-car','p-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+}
+
+function guardarSanidad(){
+  const lId=document.getElementById('s-lote').value;
+  const dias=parseInt(document.getElementById('s-prox').value)||0;
+  const fecha=document.getElementById('s-fecha').value;
+  let prox='';
+  if(dias&&fecha){const d=new Date(fecha);d.setDate(d.getDate()+dias);prox=d.toISOString().slice(0,10);}
+  db.sanidad.push({id:uid(),tipo:document.getElementById('s-tipo').value,fecha,caravana:document.getElementById('s-car').value.trim(),lote:getLoteNombre(lId),producto:document.getElementById('s-prod').value.trim(),dosis:document.getElementById('s-dosis').value.trim(),proximo:prox,notas:document.getElementById('s-notas').value.trim()});
+  saveDB(); closeModal('modal-sanidad'); renderAll(); toast('Evento guardado');
+}
+
+function guardarEstancia(){
+  db.estancia={nombre:document.getElementById('e-nombre').value.trim()||'Mi establecimiento',dueno:document.getElementById('e-dueno').value.trim(),cuit:document.getElementById('e-cuit').value.trim(),provincia:document.getElementById('e-prov').value,partido:document.getElementById('e-partido').value.trim(),ha:parseFloat(document.getElementById('e-ha').value)||0,renspa:document.getElementById('e-renspa').value.trim()};
+  saveDB(); closeModal('modal-estancia'); renderAll(); toast('Establecimiento guardado');
+}
+
+function borrar(tipo,id){ if(!confirm('¿Eliminar?'))return; db[tipo]=db[tipo].filter(x=>x.id!==id); saveDB(); renderAll(); toast('Eliminado'); }
+
+// =============================================================
+// RENDER
+// =============================================================
+function renderAll(){
+  const totalHa=db.lotes.reduce((s,l)=>s+(l.ha||0),0);
+  document.getElementById('btn-estancia').textContent='🌿 '+(db.estancia.nombre||'Mi establecimiento')+' ▾';
+  document.getElementById('s-animales').textContent=db.animales.length;
+  document.getElementById('s-animales-sub').textContent=db.animales.filter(a=>a.estado==='Gestante').length+' gestantes';
+  document.getElementById('s-lotes').textContent=db.lotes.length;
+  document.getElementById('s-lotes-sub').textContent=totalHa.toLocaleString()+' ha';
+  document.getElementById('s-cultivos').textContent=db.cultivos.length;
+  document.getElementById('s-pesajes').textContent=db.pesajes.length;
+  document.getElementById('ganado-count').textContent=db.animales.length+' animales';
+  document.getElementById('lotes-count').textContent=db.lotes.length+' lotes · '+totalHa.toLocaleString()+' ha';
+  document.getElementById('cultivos-count').textContent=db.cultivos.length+' registros';
+  renderTablaGanado(filtroActivo,busqActiva);
+  renderLotes();
+  renderCultivos();
+  renderPesajes();
+  renderSanidad();
+  renderAlertas();
+  actualizarPasos();
+}
+
+let filtroActivo='todos', busqActiva='';
+document.getElementById('filtros-cat').addEventListener('click',e=>{
+  if(!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('#filtros-cat .chip').forEach(c=>c.classList.remove('active'));
+  e.target.classList.add('active');
+  filtroActivo=e.target.dataset.cat;
+  renderTablaGanado(filtroActivo,busqActiva);
+});
+function buscarGanado(q){ busqActiva=q.toLowerCase(); renderTablaGanado(filtroActivo,busqActiva); }
+
+function estadoBadge(e){ return {Normal:'badge-green',Gestante:'badge-blue',Servicio:'badge-purple',Descarte:'badge-red'}[e]||'badge-amber'; }
+
+function renderTablaGanado(cat,q){
+  let lista=db.animales;
+  if(cat&&cat!=='todos') lista=lista.filter(a=>a.categoria===cat);
+  if(q) lista=lista.filter(a=>(a.caravana+a.raza+a.lote+a.estado).toLowerCase().includes(q));
+  const tbody=document.getElementById('tbody-ganado');
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:30px">Sin animales.</td></tr>';return;}
+  tbody.innerHTML=lista.map(a=>`<tr style="cursor:pointer" onclick="verFicha('${a.id}')">
+    <td><strong>#${a.caravana}</strong>${a.caravanaE?'<br><span style="font-size:10px;color:var(--txt3)">'+a.caravanaE+'</span>':''}</td>
+    <td>${a.categoria}</td><td>${a.raza}</td><td>${a.sexo}</td>
+    <td>${a.peso?a.peso+' kg':'—'}</td>
+    <td>${a.lote||'<span style="color:var(--txt3)">—</span>'}</td>
+    <td><span class="badge ${estadoBadge(a.estado)}">${a.estado}</span></td>
+    <td style="font-size:12px">${a.nacimiento||'—'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="event.stopPropagation();borrar('animales','${a.id}')">✕</button></td>
+  </tr>`).join('');
+}
+
+function mostrarLista(){ document.getElementById('vista-lista').style.display='block'; document.getElementById('vista-ficha').style.display='none'; }
+function volverLista(){ mostrarLista(); }
+
+function verFicha(id){
+  const a=db.animales.find(x=>x.id===id); if(!a) return;
+  const pesos=db.pesajes.filter(p=>p.caravana===a.caravana).sort((x,y)=>new Date(y.fecha)-new Date(x.fecha));
+  const san=db.sanidad.filter(s=>s.caravana===a.caravana).sort((x,y)=>new Date(y.fecha)-new Date(x.fecha));
+  document.getElementById('vista-lista').style.display='none';
+  document.getElementById('vista-ficha').style.display='block';
+  document.getElementById('cont-ficha').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div><h2 style="font-size:20px">Animal #${a.caravana}</h2><p style="font-size:12px;color:var(--txt3)">${a.raza} · ${a.sexo} · ${a.categoria}</p></div>
+      <span class="badge ${estadoBadge(a.estado)}" style="font-size:13px;padding:6px 14px">${a.estado}</span>
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">Datos</div>
+      ${fr('Caravana','#'+a.caravana)}${fr('Caravana elect.',a.caravanaE||'—')}${fr('Raza',a.raza)}${fr('Sexo',a.sexo)}${fr('Peso',a.peso?a.peso+' kg':'—')}${fr('Nacimiento',a.nacimiento||'—')}${fr('Lote',a.lote||'—')}${fr('Estado',a.estado)}${fr('Madre',a.madre||'—')}${fr('Padre',a.padre||'—')}${fr('Procedencia',a.procedencia||'—')}${fr('Notas',a.notas||'—')}
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">Pesajes (${pesos.length})</div>
+      ${pesos.length?'<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Peso kg</th><th>Ganancia</th><th>Método</th></tr></thead><tbody>'+pesos.map(p=>`<tr><td>${p.fecha}</td><td><strong>${p.peso} kg</strong></td><td>${p.ganancia||'—'}</td><td>${p.metodo}</td></tr>`).join('')+'</tbody></table></div>':'<p style="color:var(--txt3);font-size:13px">Sin pesajes.</p>'}
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">Sanidad (${san.length})</div>
+      ${san.length?'<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Próximo</th></tr></thead><tbody>'+san.map(s=>`<tr><td>${s.fecha}</td><td>${s.tipo}</td><td>${s.producto||'—'}</td><td>${s.proximo||'—'}</td></tr>`).join('')+'</tbody></table></div>':'<p style="color:var(--txt3);font-size:13px">Sin eventos.</p>'}
+    </div>
+  `;
+}
+function fr(k,v){ return `<div class="ficha-row"><span class="ficha-key">${k}</span><span class="ficha-val">${v}</span></div>`; }
+
+function renderLotes(){
+  const el=document.getElementById('lista-lotes'); if(!el) return;
+  if(!db.lotes.length){el.innerHTML='<div class="empty"><div class="empty-icon">◻</div><p>Sin lotes. Dibujá uno en el mapa o creá uno manualmente.</p></div>';renderLotesEnMapa();return;}
+  el.innerHTML=db.lotes.map(l=>`<div class="lote-row">
+    <div class="lote-color" style="background:${l.color}"></div>
+    <div style="flex:1;min-width:0"><div style="font-weight:500;font-size:13px">${l.nombre}</div>
+    <div style="font-size:11px;color:var(--txt3)">${l.tipo} · ${l.suelo}${l.geojson?' · <span style="color:var(--verde)">✓ En mapa</span>':' · Sin polígono'}${l.notas?' · '+l.notas:''}</div></div>
+    <div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:var(--verde);white-space:nowrap">${(l.ha||0).toLocaleString()} ha</div>
+    <button class="btn btn-danger btn-sm" style="margin-left:8px" onclick="borrar('lotes','${l.id}')">✕</button>
+  </div>`).join('');
+  renderLotesEnMapa();
+}
+
+function renderCultivos(){
+  const tbody=document.getElementById('tbody-cultivos');
+  if(!db.cultivos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:28px">Sin cultivos.</td></tr>';return;}
+  tbody.innerHTML=db.cultivos.map(c=>`<tr><td><strong>${c.cultivo}</strong></td><td>${c.lote||'—'}</td><td>${c.variedad||'—'}</td><td>${c.siembra||'—'}</td><td>${c.ha||'—'} ha</td><td><span class="badge badge-green">${c.estado||'Activo'}</span></td><td>${c.campaña||'—'}</td><td><button class="btn btn-danger btn-sm" onclick="borrar('cultivos','${c.id}')">✕</button></td></tr>`).join('');
+}
+
+function renderPesajes(){
+  const tbody=document.getElementById('tbody-pesajes');
+  const lista=[...db.pesajes].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:28px">Sin pesajes.</td></tr>';return;}
+  tbody.innerHTML=lista.map(p=>`<tr><td>${p.fecha||'—'}</td><td>#${p.caravana}</td><td>${p.lote||'—'}</td><td><strong>${p.peso} kg</strong></td><td>${p.ganancia||'—'}</td><td><span class="badge ${p.metodo==='Dron / GanaderIA'?'badge-blue':p.metodo==='Balanza'?'badge-green':'badge-gray'}">${p.metodo}</span></td><td style="font-size:11px;color:var(--txt3)">${p.notas||'—'}</td></tr>`).join('');
+}
+
+function renderSanidad(){
+  const tbody=document.getElementById('tbody-sanidad');
+  const hoy=new Date();
+  const lista=[...db.sanidad].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:28px">Sin eventos.</td></tr>';return;}
+  tbody.innerHTML=lista.map(s=>{
+    let est='';
+    if(s.proximo){const d=Math.round((new Date(s.proximo)-hoy)/86400000);est=d<0?'<span class="badge badge-red">Vencido</span>':d<=30?'<span class="badge badge-amber">'+d+' días</span>':'<span class="badge badge-green">OK</span>';}
+    return`<tr><td>${s.fecha||'—'}</td><td><span class="badge badge-blue">${s.tipo}</span></td><td>${s.caravana?'#'+s.caravana:s.lote||'General'}</td><td>${s.producto||'—'}</td><td>${s.dosis||'—'}</td><td>${s.proximo||'—'}</td><td>${est}</td><td><button class="btn btn-danger btn-sm" onclick="borrar('sanidad','${s.id}')">✕</button></td></tr>`;
+  }).join('');
+}
+
+function renderAlertas(){
+  const hoy=new Date(); const alertas=[];
+  db.sanidad.forEach(s=>{
+    if(!s.proximo) return;
+    const dias=Math.round((new Date(s.proximo)-hoy)/86400000);
+    if(dias<0) alertas.push({c:'var(--rojo)',txt:`${s.tipo} VENCIDO — ${s.caravana?'Anim. #'+s.caravana:s.lote||'General'}`,sub:`${s.producto||''} · Venció hace ${Math.abs(dias)} días`});
+    else if(dias<=30) alertas.push({c:'var(--naranja)',txt:`Próximo ${s.tipo} — ${s.caravana?'Anim. #'+s.caravana:s.lote||'General'}`,sub:`${s.producto||''} · En ${dias} días (${s.proximo})`});
+  });
+  const cont=document.getElementById('alertas-cont');
+  if(!alertas.length){cont.innerHTML='<div class="empty"><div class="empty-icon">✓</div><p>Sin alertas.</p></div>';return;}
+  cont.innerHTML=alertas.map(a=>`<div class="alert-row"><div class="alert-dot" style="background:${a.c}"></div><div><div style="font-size:13px;font-weight:500">${a.txt}</div><div style="font-size:11px;color:var(--txt3)">${a.sub}</div></div></div>`).join('');
+}
+
+// =============================================================
+// MAPA LEAFLET
+// =============================================================
+let mapa=null, drawnItems=null, capaBaseActual=null, capaCop=null, cascoMark=null, lotePoligTemp=null, capasLotes={}, copActivo=null;
+
+const BASES = {
+  osm:  ()=>L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),
+  sat:  ()=>L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}),
+  goog: ()=>L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',{attribution:'© Google',maxZoom:20})
+};
+
+// Copernicus Data Space — nombres de capas estándar (configurables en Dashboard)
+// Ref: https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/OGC/WMS.html
+// REEMPLAZADO POR NASA GIBS — ver sección CAPAS NASA GIBS abajo
+const LEYENDAS = {
+  ndvi:  {cols:['#d73027','#f46d43','#fee08b','#d9ef8b','#1a9850'],lbl:['-1','0','0.5','0.8','1'],desc:'Sobre 0.6 = cultivo en desarrollo activo. Rojo = suelo desnudo o estrés.'},
+  ndwi:  {cols:['#d7191c','#fdae61','#ffffbf','#abd9e9','#2c7bb6'],lbl:['-1','-0.5','0','0.5','1'],desc:'Positivo = agua o humedad alta. Negativo = suelo seco.'},
+  rgb:   {cols:['#2b6cb0','#276749','#c6f6d5','#f6e05e','#718096'],lbl:['Agua','Veg.','Campo','Suelo','Otro'],desc:'Color natural Sentinel-2, resolución ~10 m/pixel.'},
+  falso: {cols:['#c6f6d5','#276749','#e53e3e','#f6e05e','#2b6cb0'],lbl:['Baja veg.','Alta veg.','Urbano','Suelo','Agua'],desc:'Rojo intenso = vegetación activa sana.'}
+};
+
+function getCfgCampo(){ try{return JSON.parse(localStorage.getItem('campioapp_campo'))||{lat:-31.74154,lng:-58.8444,zoom:14,nombre:''};}catch(e){return{lat:-31.74154,lng:-58.8444,zoom:14,nombre:''};} }
+function saveCfgCampo(c){ localStorage.setItem('campioapp_campo',JSON.stringify(c)); }
+
+function iniciarMapa(){
+  if(mapa){mapa.invalidateSize();return;}
+  const cfg=getCfgCampo();
+  mapa=L.map('mapa-lotes',{zoomControl:true}).setView([cfg.lat,cfg.lng],cfg.zoom);
+  capaBaseActual=BASES.osm();
+  capaBaseActual.addTo(mapa);
+  drawnItems=new L.FeatureGroup();
+  mapa.addLayer(drawnItems);
+  const dc=new L.Control.Draw({draw:{polygon:{shapeOptions:{color:'#1a5c38',fillOpacity:0.3},showArea:true,allowIntersection:false},rectangle:{shapeOptions:{color:'#1a5c38',fillOpacity:0.3}},polyline:false,circle:false,circlemarker:false,marker:false},edit:{featureGroup:drawnItems}});
+  mapa.addControl(dc);
+  if(cfg.nombre) ponerCascoMarker(cfg);
+  mapa.on(L.Draw.Event.CREATED,function(e){
+    drawnItems.addLayer(e.layer); lotePoligTemp=e.layer;
+    let ha=0; try{ha=calcHa(e.layer.getLatLngs()[0]);}catch(ex){}
+    document.getElementById('lm-ha').value=ha.toFixed(2);
+    document.getElementById('lm-nombre').value='';
+    document.getElementById('lm-notas').value='';
+    openModal('modal-lote-mapa');
+  });
+  mapa.on(L.Draw.Event.EDITED,function(e){
+    e.layers.eachLayer(function(l){const id=l.options.loteId;if(id){const lt=db.lotes.find(x=>x.id===id);if(lt){lt.geojson=l.toGeoJSON();saveDB();}}});
+    toast('Polígono actualizado');
+  });
+  mapa.on(L.Draw.Event.DELETED,function(e){
+    e.layers.eachLayer(function(l){const id=l.options.loteId;if(id&&confirm('¿Eliminar lote "'+(db.lotes.find(x=>x.id===id)||{}).nombre+'" de la base?')){db.lotes=db.lotes.filter(x=>x.id!==id);saveDB();renderAll();}});
+  });
+  const hoy=new Date().toISOString().slice(0,10);
+  const el=document.getElementById('fecha-cop');
+  if(el&&!el.value) el.value=hoy;
+}
+
+function ponerCascoMarker(cfg){
+  if(cascoMark){mapa.removeLayer(cascoMark);}
+  const ico=L.divIcon({html:`<div style="background:#1a5c38;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">🏠</div>`,iconSize:[30,30],iconAnchor:[15,15],className:''});
+  cascoMark=L.marker([cfg.lat,cfg.lng],{icon:ico}).addTo(mapa).bindPopup(`<strong>${cfg.nombre||'Casco principal'}</strong><br><span style="font-size:11px;color:#666">${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}</span>`);
+}
+
+function setBase(tipo){
+  if(!mapa) return;
+  if(capaBaseActual) mapa.removeLayer(capaBaseActual);
+  capaBaseActual=BASES[tipo]();
+  capaBaseActual.addTo(mapa);
+  if(capaCop) capaCop.bringToFront();
+  ['osm','sat','goog'].forEach(k=>{ const b=document.getElementById('btn-'+k); if(b) b.className='layer-btn'+(k===tipo?' active-'+k:''); });
+}
+
+// =============================================================
+// CAPAS SATELITALES
+// NOTA TÉCNICA: Los servicios WMS externos (NASA, Copernicus, IGN)
+// requieren que la app esté en un servidor web (no file://) por CORS.
+// Solución: subir la app a Netlify (gratis) — los WMS funcionan desde ahí.
+// Mientras tanto: usamos tiles XYZ que SÍ funcionan sin servidor.
+// =============================================================
+
+// Tiles XYZ que funcionan desde file:// y desde servidor
+const CAPAS_SAT_XYZ = {
+  ndvi: {
+    // GIBS NASA via XYZ — funciona solo desde servidor web
+    url: fecha => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_NDVI_8Day/default/${fecha}/GoogleMapsCompatible/{z}/{y}/{x}.png`,
+    label: 'NDVI — MODIS/Terra (NASA GIBS)',
+    desc: '250m/pixel · Requiere servidor web (Netlify)',
+    leyenda: { cols:['#d73027','#f46d43','#fee08b','#d9ef8b','#66bd63','#1a9850'], lbl:['-0.2','0','0.2','0.4','0.6','0.8+'] },
+    info: 'Sobre 0.5 = cultivo en buen estado. Rojo = suelo desnudo o estrés severo.'
+  },
+  rgb: {
+    url: fecha => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${fecha}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,
+    label: 'RGB color real — MODIS/Terra (NASA GIBS)',
+    desc: '250m/pixel diario · Requiere servidor web',
+    leyenda: { cols:['#2b6cb0','#276749','#c6f6d5','#f6e05e','#718096'], lbl:['Agua','Veg.','Campo','Suelo','Nubes'] },
+    info: 'Imagen satelital diaria en colores naturales.'
+  },
+  falso: {
+    url: fecha => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_Bands721/default/${fecha}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,
+    label: 'Falso color infrarrojo — MODIS/Terra',
+    desc: '250m/pixel · Rojo = vegetación activa',
+    leyenda: { cols:['#c6f6d5','#276749','#e53e3e','#f6e05e','#2b6cb0'], lbl:['Baja veg.','Alta veg.','Urbano','Suelo seco','Agua'] },
+    info: 'Rojo/naranja brillante = vegetación sana activa.'
+  },
+  ign: {
+    url: () => 'https://wms.ign.gob.ar/geoserver/gwc/service/tms/1.0.0/capabaseargenmap@EPSG:900913@png/{z}/{x}/{-y}.png',
+    label: 'Mapa base IGN Argentina',
+    desc: 'Instituto Geográfico Nacional — cartografía oficial',
+    leyenda: { cols:['#2b6cb0','#276749','#f6e05e','#e53e3e','#718096'], lbl:['Agua','Veg.','Zonas cult.','Urb.','Caminos'] },
+    info: 'Mapa cartográfico oficial de Argentina del IGN. Sin NDVI pero con detalle de rutas, localidades y límites.'
+  }
+};
+
+function getSHInstanceId(){ return localStorage.getItem('campioapp_sh_instance')||''; }
+
+function toggleCop(tipo){
+  if(!mapa){toast('Abrí la pestaña Lotes primero','e');return;}
+  if(copActivo===tipo){quitarCop();return;}
+  if(capaCop){mapa.removeLayer(capaCop);capaCop=null;}
+
+  const fecha=document.getElementById('fecha-cop').value||new Date().toISOString().slice(0,10);
+  const info=CAPAS_SAT_XYZ[tipo];
+  const isLocal=location.protocol==='file:';
+
+  if(tipo==='ign'){
+    // IGN funciona diferente — TMS invertido
+    capaCop=L.tileLayer(info.url(fecha),{
+      attribution:'© IGN Argentina',
+      maxZoom:18,
+      opacity:0.9,
+      tms:false
+    });
+  } else {
+    capaCop=L.tileLayer(info.url(fecha),{
+      attribution:'© NASA GIBS / MODIS Terra',
+      maxZoom:9,
+      opacity:0.82,
+      tms:false,
+      crossOrigin:true
+    });
+  }
+
+  capaCop.addTo(mapa);
+  copActivo=tipo;
+
+  ['ndvi','rgb','falso','ign'].forEach(k=>{
+    const b=document.getElementById('btn-'+k);
+    if(b) b.className='layer-btn'+(k===tipo?' active-cop':'');
+  });
+
+  // Construir link inteligente a Copernicus centrado en el campo
+  const c=mapa.getCenter(); const z=mapa.getZoom();
+  const capaCop_id = {ndvi:'3_NDVI',rgb:'1_TRUE_COLOR',falso:'2_FALSE_COLOR',ign:'1_TRUE_COLOR'}[tipo];
+  const copUrl=`https://browser.dataspace.copernicus.eu/?zoom=${z}&lat=${c.lat.toFixed(5)}&lng=${c.lng.toFixed(5)}&themeId=AGRICULTURE&datasetId=S2_L2A_CDAS&fromTime=${fecha}T00:00:00.000Z&toTime=${fecha}T23:59:59.999Z&layerId=${capaCop_id}&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE`;
+
+  const infoDiv=document.getElementById('info-capa');
+  let msg = info.label+' · '+info.desc;
+  if(isLocal && tipo!=='ign') msg += ' · ⚠ Para ver NASA GIBS publicá en Netlify';
+  document.getElementById('info-capa-txt').textContent=msg;
+  document.getElementById('link-cop').href=copUrl;
+  document.getElementById('link-cop').textContent='🛰 Ver Sentinel-2 en Copernicus →';
+  infoDiv.style.display='flex';
+
+  const ley=info.leyenda;
+  document.getElementById('leyenda-titulo').textContent=info.label;
+  document.getElementById('leyenda-barra').innerHTML=ley.cols.map(c=>`<div style="flex:1;background:${c}"></div>`).join('');
+  document.getElementById('leyenda-labels').innerHTML=ley.lbl.map(l=>`<span>${l}</span>`).join('');
+  document.getElementById('leyenda-desc').textContent=info.info;
+  document.getElementById('leyenda-div').style.display='block';
+
+  if(isLocal && tipo!=='ign'){
+    toast('⚠ NASA GIBS necesita servidor — el link a Copernicus sí funciona','e');
+  } else {
+    toast('Cargando '+info.label+'...');
+  }
+
+  capaCop.on('tileerror',function(){
+    if(isLocal){
+      document.getElementById('info-capa-txt').textContent='⚠ Bloqueado por CORS (app local). Subí la app a Netlify para ver las capas, o usá el link a Copernicus.';
+    }
+  });
+}
+
+function quitarCop(){
+  if(capaCop&&mapa){mapa.removeLayer(capaCop);capaCop=null;}
+  copActivo=null;
+  ['ndvi','rgb','falso','ign'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn';});
+  document.getElementById('info-capa').style.display='none';
+  document.getElementById('leyenda-div').style.display='none';
+}
+
+function guardarConfigCampo(){
+  const lat=parseFloat(document.getElementById('cfg-lat').value);
+  const lng=parseFloat(document.getElementById('cfg-lng').value);
+  if(isNaN(lat)||isNaN(lng)){toast('Coordenadas inválidas','e');return;}
+  const zoom=parseInt(document.getElementById('cfg-zoom').value)||14;
+  const nombre=document.getElementById('cfg-nombre').value.trim();
+  const cfg={lat,lng,zoom,nombre};
+  saveCfgCampo(cfg);
+  if(mapa){mapa.setView([lat,lng],zoom);ponerCascoMarker(cfg);}
+  closeModal('modal-config-campo');
+  toast('Campo configurado. El mapa ahora abre centrado en tu casco.');
+}
+
+function calcHa(ll){
+  if(!ll||ll.length<3) return 0;
+  const R=6371000; let area=0; const n=ll.length;
+  for(let i=0;i<n;i++){const j=(i+1)%n;const xi=ll[i].lng*Math.PI/180*Math.cos(ll[i].lat*Math.PI/180)*R;const yi=ll[i].lat*Math.PI/180*R;const xj=ll[j].lng*Math.PI/180*Math.cos(ll[j].lat*Math.PI/180)*R;const yj=ll[j].lat*Math.PI/180*R;area+=xi*yj-xj*yi;}
+  return Math.abs(area/2)/10000;
+}
+
+function renderLotesEnMapa(){
+  if(!mapa||!drawnItems) return;
+  Object.values(capasLotes).forEach(l=>{try{mapa.removeLayer(l);}catch(e){}});
+  capasLotes={};
+  db.lotes.forEach(lote=>{
+    if(!lote.geojson) return;
+    try{
+      const layer=L.geoJSON(lote.geojson,{style:{color:lote.color||'#52b788',fillColor:lote.color||'#52b788',fillOpacity:0.28,weight:2.5}});
+      layer.eachLayer(l=>{
+        l.options.loteId=lote.id;
+        l.bindPopup(`<div style="font-family:sans-serif;min-width:150px"><strong style="font-size:14px">${lote.nombre}</strong><br><span style="font-size:12px;color:#555">${lote.tipo} · ${(lote.ha||0).toFixed(1)} ha</span><br><span style="font-size:12px;color:#555">Suelo: ${lote.suelo}</span>${lote.notas?'<br><em style="font-size:11px;color:#999">'+lote.notas+'</em>':''}</div>`);
+        drawnItems.addLayer(l);
+      });
+      capasLotes[lote.id]=layer;
+    }catch(ex){}
+  });
+}
+
+function guardarLoteMapa(){
+  const nombre=document.getElementById('lm-nombre').value.trim();
+  if(!nombre){toast('Nombre obligatorio','e');return;}
+  if(!lotePoligTemp) return;
+  const color=document.getElementById('lm-color').value;
+  lotePoligTemp.setStyle({color,fillColor:color,fillOpacity:0.28});
+  const ll=lotePoligTemp.getLatLngs?lotePoligTemp.getLatLngs()[0]:[];
+  const ha=parseFloat(document.getElementById('lm-ha').value)||calcHa(ll);
+  const geojson=lotePoligTemp.toGeoJSON();
+  const id=uid();
+  lotePoligTemp.options.loteId=id;
+  lotePoligTemp.bindPopup(`<strong>${nombre}</strong><br>${ha.toFixed(1)} ha · ${document.getElementById('lm-tipo').value}`);
+  db.lotes.push({id,nombre,ha:parseFloat(ha.toFixed(2)),tipo:document.getElementById('lm-tipo').value,suelo:document.getElementById('lm-suelo').value,color,notas:document.getElementById('lm-notas').value.trim(),geojson});
+  lotePoligTemp=null;
+  saveDB(); closeModal('modal-lote-mapa'); renderAll();
+  toast('Lote "'+nombre+'" guardado con polígono');
+}
+function cancelarLoteMapa(){ if(lotePoligTemp){drawnItems.removeLayer(lotePoligTemp);lotePoligTemp=null;} closeModal('modal-lote-mapa'); }
+
+// =============================================================
+// IMPORTAR / EXPORTAR
+// =============================================================
+function parseCSV(txt){
+  const lines=txt.trim().split('\n').filter(l=>l.trim());
+  if(lines.length<2) return[];
+  const headers=lines[0].split(/[,;]/).map(h=>h.trim().replace(/["\r]/g,'').toLowerCase());
+  return lines.slice(1).map(line=>{const cols=line.split(/[,;]/).map(c=>c.trim().replace(/["\r]/g,''));const row={};headers.forEach((h,i)=>row[h]=cols[i]||'');return row;});
+}
+
+function importGanado(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const rows=parseCSV(e.target.result);let count=0;
+    rows.forEach(r=>{if(!r.caravana)return;db.animales.push({id:uid(),caravana:r.caravana,caravanaE:r.caravana_electronica||'',categoria:r.categoria||'Sin categoría',sexo:r.sexo||'',raza:r.raza||'',peso:parseFloat(r.peso_kg)||0,nacimiento:r.fecha_nacimiento||'',lote:r.lote||'',loteId:'',estado:r.estado||'Normal',madre:r.madre||'',padre:r.padre||'',procedencia:r.procedencia||'',notas:r.notas||'',fechaCarga:new Date().toISOString().slice(0,10)});count++;});
+    saveDB();renderAll();
+    const el=document.getElementById('r-animales');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${count} animales importados.</span>`;
+    toast(count+' animales importados');
+  };reader.readAsText(file,'UTF-8');
+}
+
+function importPesajes(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const rows=parseCSV(e.target.result);let count=0;
+    rows.forEach(r=>{const car=r.animal_id||r.caravana||r.id||('A-'+count);db.pesajes.push({id:uid(),caravana:car,fecha:r.fecha||new Date().toISOString().slice(0,10),peso:parseFloat(r.peso_estimado||r.peso_kg||r.peso)||0,lote:r.lote||'',metodo:'Dron / GanaderIA',ganancia:'',notas:r.confianza?'Confianza: '+r.confianza:''});count++;});
+    saveDB();renderAll();
+    const el=document.getElementById('r-pesajes');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${count} pesajes importados.</span>`;
+    toast(count+' pesajes de GanaderIA importados');
+  };reader.readAsText(file,'UTF-8');
+}
+
+function importGeoJSON(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const gj=JSON.parse(e.target.result);let count=0;
+      const feats=gj.features||[gj];
+      feats.forEach((f,i)=>{
+        const p=f.properties||{};
+        const nombre=p.nombre||p.name||p.NOMBRE||p.Name||('Lote '+(i+1));
+        const ha=parseFloat(p.hectareas||p.ha||p.area_ha||p.AREA||0);
+        db.lotes.push({id:uid(),nombre,ha,tipo:'Agrícola',suelo:'Franco',color:'#52b788',notas:'Importado desde QGIS/GeoJSON',geojson:f});count++;
+      });
+      saveDB();renderAll();
+      const el=document.getElementById('r-geojson');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${count} lotes importados desde GeoJSON.</span>`;
+      toast(count+' lotes importados desde QGIS');
+    }catch(ex){toast('Error al leer GeoJSON: '+ex.message,'e');}
+  };reader.readAsText(file,'UTF-8');
+}
+
+function toCSV(headers,rows){ return[headers.join(','),...rows.map(r=>headers.map(h=>{const v=(r[h]||'').toString();return v.includes(',')?'"'+v+'"':v;}).join(','))].join('\n'); }
+function dlCSV(fname,content){ const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click(); }
+function exportarCSV(tipo){
+  const cfg={animales:{h:['caravana','caravanaE','categoria','raza','sexo','peso','nacimiento','lote','estado','madre','padre','notas'],f:'animales.csv'},pesajes:{h:['fecha','caravana','lote','peso','ganancia','metodo','notas'],f:'pesajes.csv'},cultivos:{h:['cultivo','lote','variedad','siembra','ha','estado','campaña','notas'],f:'cultivos.csv'},sanidad:{h:['fecha','tipo','caravana','lote','producto','dosis','proximo','notas'],f:'sanidad.csv'}};
+  const c=cfg[tipo]; dlCSV(c.f,toCSV(c.h,db[tipo])); toast('CSV descargado');
+}
+function exportarBackup(){ const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='campioapp_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();toast('Backup descargado'); }
+
+function dlPlantilla(tipo){
+  const p={animales:'caravana,caravana_electronica,categoria,raza,sexo,peso_kg,fecha_nacimiento,lote,estado,madre,padre,notas\n0001,,Vaca,Aberdeen Angus,Hembra,380,2021-03-15,Lote Sur,Normal,,,Ejemplo\n0002,,Toro,Hereford,Macho,520,2020-05-10,Lote Norte,Normal,,,',pesajes:'animal_id,peso_estimado,confianza,fecha,lote\n0001,387,0.95,2026-05-20,Lote Sur\n0002,412,0.92,2026-05-20,Lote Norte'};
+  dlCSV('plantilla_'+tipo+'.csv',p[tipo]);
+}
+
+// =============================================================
+// TOAST
+// =============================================================
+let toastTimer;
+function toast(msg,tipo){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.background=tipo==='e'?'var(--rojo)':'var(--verde)';
+  t.classList.add('show');clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// =============================================================
+// MERCADO — ANÁLISIS GANADERO
+// =============================================================
+const PRECIOS_DEFAULT = {t1:4.40,t2:4.81,g1:3.59,g2:3.75,maizMdo:175,tc:1450};
+
+function getPrecios(){
+  try{return JSON.parse(localStorage.getItem('campioapp_precios'))||PRECIOS_DEFAULT;}catch(e){return PRECIOS_DEFAULT;}
+}
+function savePrecios(p){localStorage.setItem('campioapp_precios',JSON.stringify(p));}
+
+function getParams(){
+  return {
+    maiz: parseFloat(document.getElementById('sl-maiz').value)||100,
+    conv: parseFloat(document.getElementById('sl-conv').value)||5.5,
+    tarifa: parseFloat(document.getElementById('sl-tarifa').value)||0.65,
+    cab: parseInt(document.getElementById('sl-cab').value)||150
+  };
+}
+
+function initMercado(){
+  const p=getPrecios();
+  // Cargar sliders con valores guardados
+  const pm=JSON.parse(localStorage.getItem('campioapp_params_mercado')||'{}');
+  if(pm.maiz) document.getElementById('sl-maiz').value=pm.maiz;
+  if(pm.conv) document.getElementById('sl-conv').value=pm.conv;
+  if(pm.tarifa) document.getElementById('sl-tarifa').value=pm.tarifa;
+  if(pm.cab) document.getElementById('sl-cab').value=pm.cab;
+  recalcular();
+}
+
+function recalcular(){
+  const p=getPrecios();
+  const params=getParams();
+  const tc=tcActual||p.tc||1450;
+  const enARS=document.getElementById('toggle-moneda')?.checked||false;
+
+  // Toggle visual
+  const track=document.getElementById('track-moneda');
+  const thumb=document.getElementById('thumb-moneda');
+  if(track) track.style.background=enARS?'var(--verde)':'var(--gris2)';
+  if(thumb) thumb.style.transform=enARS?'translateX(16px)':'translateX(0)';
+  const tcEl=document.getElementById('tc-display');
+  if(tcEl) tcEl.textContent='TC CCL: $'+Math.round(tc).toLocaleString('es-AR');
+
+  const fmt=(usd)=>enARS?'$'+Math.round(usd*tc).toLocaleString('es-AR'):'US$ '+usd.toFixed(0);
+  const fmtPrecio=(usd)=>enARS?'$'+Math.round(usd*tc).toLocaleString('es-AR')+'/kg':'US$ '+usd.toFixed(2)+'/kg';
+
+  document.getElementById('lbl-maiz').textContent='US$'+params.maiz;
+  document.getElementById('lbl-conv').textContent=params.conv.toFixed(1);
+  document.getElementById('lbl-tarifa').textContent='US$'+params.tarifa.toFixed(2);
+  document.getElementById('lbl-cab').textContent=params.cab;
+  localStorage.setItem('campioapp_params_mercado',JSON.stringify(params));
+
+  const otrosCostos=40,pctMaiz=0.62;
+  const e1_ing=150*p.t1,e1_mar=e1_ing;
+  const e2_compra=130*p.t2,e2_cos_maiz=(90*params.conv*pctMaiz/1000)*params.maiz;
+  const e2_ing=220*p.g1,e2_cos=e2_compra+e2_cos_maiz+otrosCostos,e2_mar=e2_ing-e2_cos;
+  const e3_cos_maiz=(60*params.conv*pctMaiz/1000)*params.maiz;
+  const e3_ing=280*p.g2,e3_cos=10+e3_cos_maiz+otrosCostos/2,e3_mar=e3_ing-e3_cos;
+  const e4_cos_maiz=(90*params.conv*pctMaiz/1000)*params.maiz;
+  const e4_ing=90*params.tarifa,e4_mar_animal=e4_ing-e4_cos_maiz;
+  const e4_mar_ciclo=e4_mar_animal*params.cab;
+
+  document.getElementById('kpi-t1').textContent=fmtPrecio(p.t1);
+  document.getElementById('kpi-t2').textContent=fmtPrecio(p.t2);
+  document.getElementById('kpi-g1').textContent=fmtPrecio(p.g1);
+  document.getElementById('kpi-g2').textContent=fmtPrecio(p.g2);
+
+  const spread=p.g1-p.t1;
+  document.getElementById('ind-spread').textContent=(spread>=0?'+':'')+fmtPrecio(spread);
+  document.getElementById('ind-spread').style.color=spread<0?'#c0392b':'#1a5c38';
+  document.getElementById('ind-relacion').textContent=Math.round(p.t1*1000/(p.maizMdo||175))+' kg';
+  const ventaja=(p.maizMdo||175)-params.maiz;
+  document.getElementById('ind-ventaja').textContent='US$'+ventaja+'/tn'+(enARS?' = $'+Math.round(ventaja*tc).toLocaleString('es-AR'):'');
+  document.getElementById('alerta-spread').style.display=spread<0?'flex':'none';
+
+  const esc=[
+    {n:'E1 — Vender ternero propio (150 kg)',       ing:e1_ing,  cos:0,        mar:e1_mar},
+    {n:'E2 — Comprar remate → gordo 220 kg',        ing:e2_ing,  cos:e2_cos,   mar:e2_mar},
+    {n:'E3 — Ternero propio: recría + feedlot 280', ing:e3_ing,  cos:e3_cos,   mar:e3_mar},
+    {n:'E4 — Maquila (por animal)',                 ing:e4_ing,  cos:e4_cos_maiz, mar:e4_mar_animal},
+  ];
+  const maxM=Math.max(...esc.map(e=>Math.abs(e.mar)));
+  document.getElementById('tbody-escenarios').innerHTML=esc.map(e=>{
+    const b=e.mar>50?'badge-green':e.mar>0?'badge-amber':'badge-red';
+    const l=e.mar>50?'Conveniente':e.mar>0?'Marginal':'No cierra';
+    return`<tr><td style="font-weight:500">${e.n}</td><td style="text-align:right">${fmt(e.ing)}</td><td style="text-align:right">${fmt(e.cos)}</td><td style="text-align:right;font-weight:700;color:${e.mar>=0?'var(--verde)':'var(--rojo)'}">${fmt(e.mar)}</td><td style="text-align:center"><span class="badge ${b}">${l}</span></td></tr>`;
+  }).join('');
+
+  document.getElementById('barras-escenarios').innerHTML=esc.map(e=>{
+    const pct=Math.abs(e.mar)/maxM*100;
+    const col=e.mar>50?'var(--verde)':e.mar>0?'var(--naranja)':'var(--rojo)';
+    return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--txt2)">${e.n.split('—')[0].trim()}</span><span style="font-weight:600;color:${col}">${fmt(e.mar)}</span></div><div style="background:var(--gris2);border-radius:4px;height:8px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:4px;transition:width 0.4s"></div></div></div>`;
+  }).join('');
+
+  document.getElementById('semaforo').innerHTML=[
+    {l:'Vender ternero propio ahora',ok:e1_mar>400,t:e1_mar>400?'Captura el máximo histórico':'Precio bajo actualmente'},
+    {l:'Comprar ternero para feedlot',ok:e2_mar>0,t:e2_mar>0?`Cierra: ${fmt(e2_mar)}/animal`:'Spread invertido — no cierra'},
+    {l:'Feedlot con ternero propio',ok:e3_mar>300,t:`${fmt(e3_mar)}/animal`},
+    {l:'Maquila / hotelería',ok:e4_mar_animal>20,t:e4_mar_animal>20?`${fmt(e4_mar_animal)}/animal sin capital inmovilizado`:'Revisar tarifa o costo maíz'},
+  ].map(i=>`<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--gris);border-radius:8px"><span style="font-size:18px">${i.ok?'🟢':'🔴'}</span><div><div style="font-size:13px;font-weight:500">${i.l}</div><div style="font-size:11px;color:var(--txt3)">${i.t}</div></div></div>`).join('');
+
+  const mejor=esc.reduce((a,b)=>b.mar>a.mar?b:a);
+  document.getElementById('analisis-auto').innerHTML=`<strong>Mejor opción hoy:</strong> ${mejor.n.split('—')[1]?.trim()||mejor.n} · ${fmt(mejor.mar)}/animal. `+(e4_mar_ciclo>2000?`La maquila genera ${fmt(e4_mar_ciclo)}/ciclo con ${params.cab} animales sin capital inmovilizado.`:'');
+
+  document.getElementById('kpis-maquila').innerHTML=`
+    <div style="text-align:center;padding:12px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--verde)">${fmt(e4_mar_animal)}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Margen por animal</div></div>
+    <div style="text-align:center;padding:12px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--verde)">${fmt(e4_mar_ciclo)}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Por ciclo (${params.cab} cab.)</div></div>
+    <div style="text-align:center;padding:12px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--azul)">${fmt(e4_mar_ciclo*2)}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Est. anual (2 ciclos)</div></div>`;
+}
+
+function guardarPrecios(){
+  const p={
+    t1:parseFloat(document.getElementById('pr-t1').value)||4.40,
+    t2:parseFloat(document.getElementById('pr-t2').value)||4.81,
+    g1:parseFloat(document.getElementById('pr-g1').value)||3.59,
+    g2:parseFloat(document.getElementById('pr-g2').value)||3.75,
+    maizMdo:parseFloat(document.getElementById('pr-maiz-mdo').value)||175,
+    tc:parseFloat(document.getElementById('pr-tc').value)||1450
+  };
+  savePrecios(p);
+  closeModal('modal-precios');
+  recalcular();
+  toast('Precios actualizados y recalculados');
+}
+
+// Abrir modal precios con valores actuales
+const _openModalOrig=openModal;
+function openModal(id){
+  _openModalOrig(id);
+  if(id==='modal-precios'){
+    const p=getPrecios();
+    document.getElementById('pr-t1').value=p.t1;
+    document.getElementById('pr-t2').value=p.t2;
+    document.getElementById('pr-g1').value=p.g1;
+    document.getElementById('pr-g2').value=p.g2;
+    document.getElementById('pr-maiz-mdo').value=p.maizMdo;
+    document.getElementById('pr-tc').value=p.tc;
+  }
+}
+// =============================================================
+
+// =============================================================
+// COTIZACIÓN DÓLAR — DolarAPI.com (gratis, sin API key)
+// Funciona desde servidor (Netlify). Desde file:// usa TC guardado.
+// =============================================================
+let tcActual = 1450; // fallback
+
+async function fetchDolar(){
+  try{
+    const res = await fetch('https://dolarapi.com/v1/dolares');
+    if(!res.ok) throw new Error('no response');
+    const data = await res.json();
+    // Extraer los tipos que nos interesan
+    const tipos = {
+      blue:      data.find(d=>d.casa==='blue'),
+      mep:       data.find(d=>d.casa==='bolsa'),
+      ccl:       data.find(d=>d.casa==='contadoconliqui'),
+      oficial:   data.find(d=>d.casa==='oficial'),
+    };
+    // Usar CCL como referencia para conversiones (el más cercano al libre)
+    if(tipos.ccl?.venta) tcActual = tipos.ccl.venta;
+    else if(tipos.blue?.venta) tcActual = tipos.blue.venta;
+    // Actualizar ticket en inicio
+    const container = document.getElementById('dolar-values');
+    if(container){
+      container.innerHTML = Object.entries({
+        'Blue': tipos.blue, 'MEP': tipos.mep, 'CCL': tipos.ccl, 'Oficial': tipos.oficial
+      }).filter(([,v])=>v).map(([nombre,v])=>`
+        <div style="display:flex;flex-direction:column;align-items:center;line-height:1.3">
+          <span style="font-size:10px;opacity:0.65;font-weight:500">${nombre}</span>
+          <span style="font-size:15px;font-weight:700">$${v.venta?.toLocaleString('es-AR')}</span>
+        </div>`).join('<div style="width:1px;background:rgba(255,255,255,0.2);height:28px"></div>');
+      const hora = document.getElementById('dolar-hora');
+      if(hora) hora.textContent = 'Actualizado '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    }
+    // Guardar TC para uso offline
+    localStorage.setItem('campioapp_tc_cache', JSON.stringify({tc:tcActual, ts:Date.now()}));
+    // Si Mercado está abierto, recalcular con nuevo TC
+    if(document.getElementById('screen-mercado').classList.contains('active')) recalcular();
+  } catch(e){
+    // Usar caché o fallback
+    try{
+      const cache = JSON.parse(localStorage.getItem('campioapp_tc_cache')||'{}');
+      if(cache.tc) tcActual = cache.tc;
+    }catch(ex){}
+    const container = document.getElementById('dolar-values');
+    if(container){
+      const p = getPrecios();
+      container.innerHTML = `<span style="font-size:12px;opacity:0.7">Sin conexión · TC guardado: $${(p.tc||tcActual).toLocaleString('es-AR')}</span>`;
+    }
+  }
+}
+
+// =============================================================
+// OCULTAR PASOS si ya hay datos cargados
+// =============================================================
+function actualizarPasos(){
+  const hayDatos = db.animales.length>0 || db.lotes.length>0;
+  const el = document.getElementById('card-pasos');
+  if(el) el.style.display = hayDatos ? 'none' : 'block';
+}
+// =============================================================
+
+// =============================================================
+// GRÁFICOS HISTÓRICOS — Chart.js
+// Datos históricos reales de hacienda argentina (Liniers/Rosgan)
+// en USD/kg promedio anual. Podés editar estos arrays.
+// =============================================================
+const HIST = {
+  labels: ['2018','2019','2020','2021','2022','2023','2024','may-26'],
+  ternero: [1.85, 1.60, 1.90, 2.80, 3.20, 3.50, 3.90, 4.40],
+  gordo:   [1.65, 1.45, 1.70, 2.30, 2.70, 2.90, 3.20, 3.59],
+  maiz:    [155,  140,  130,  175,  250,  200,  180,  175],
+  spread:  [0.20, 0.15, 0.20, 0.50, 0.50, 0.60, 0.70,-0.81],
+};
+
+const CHART_CFG = {
+  ternero: { label:'Ternero invernada (US$/kg)', data:HIST.ternero, color:'#c0392b', desc:'Precio del ternero de invernada 150-180 kg (US$/kg) · Liniers + Rosgan. Mayo 2026 = RÉCORD HISTÓRICO.' },
+  gordo:   { label:'Gordo liviano (US$/kg)',      data:HIST.gordo,   color:'#1a5c38', desc:'Precio del novillo gordo/consumo (US$/kg) · Mercado de Liniers.' },
+  maiz:    { label:'Maíz Rosario (US$/tn)',       data:HIST.maiz,    color:'#d4820a', desc:'Precio del maíz disponible en pizarra Rosario (US$/tn). Tu maíz propio cuesta ~US$100/tn.' },
+  spread:  { label:'Spread ternero−gordo (US$/kg)', data:HIST.spread,color:'#1a5c8b', desc:'Diferencia de precio por kg entre ternero y gordo. Negativo = spread invertido (situación actual récord).' },
+};
+
+let chartInstance = null;
+let chartActivo = 'ternero';
+
+function initChart(){
+  const canvas = document.getElementById('chart-precios');
+  if(!canvas || !window.Chart) return;
+  const cfg = CHART_CFG[chartActivo];
+  // Combinar histórico + registros propios del mismo tipo
+  const registros = (db.registrosPrecios||[]).filter(r=>r.cat===chartActivo).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const labelsExtra = registros.map(r=>r.fecha.slice(0,7));
+  const dataExtra   = registros.map(r=>r.precio);
+  const allLabels   = [...HIST.labels, ...labelsExtra];
+  const allData     = [...cfg.data,    ...dataExtra];
+
+  if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridCol = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const txtCol  = isDark ? '#9a9590' : '#9a9590';
+
+  chartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [{
+        label: cfg.label,
+        data: allData,
+        borderColor: cfg.color,
+        backgroundColor: cfg.color+'22',
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointBackgroundColor: cfg.color,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        tension: 0.35,
+        fill: true,
+      }, ...(registros.length ? [{
+        label: 'Mis registros',
+        data: [...Array(HIST.labels.length).fill(null), ...dataExtra],
+        borderColor: '#7c3aed',
+        backgroundColor: '#7c3aed33',
+        borderWidth: 2,
+        pointRadius: 7,
+        pointStyle: 'star',
+        pointBackgroundColor: '#7c3aed',
+        tension: 0,
+        fill: false,
+      }]:[])],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { labels: { color: txtCol, font: { family: "'DM Sans', sans-serif", size: 12 }, boxWidth: 16 } },
+        tooltip: {
+          backgroundColor: isDark ? '#2c2c2a' : '#fff',
+          titleColor: isDark ? '#c2c0b6' : '#1a1a18',
+          bodyColor: isDark ? '#9a9590' : '#5a5a55',
+          borderColor: isDark ? '#444441' : '#e0ddd8',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : '—'}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: txtCol, font: { size: 11 } }, grid: { color: gridCol } },
+        y: { ticks: { color: txtCol, font: { size: 11 } }, grid: { color: gridCol },
+             title: { display: true, text: chartActivo==='maiz'?'US$/tn':'US$/kg', color: txtCol, font: { size: 11 } } }
+      }
+    }
+  });
+  document.getElementById('chart-desc').textContent = cfg.desc;
+}
+
+function setChart(tipo){
+  chartActivo = tipo;
+  ['ternero','gordo','maiz','spread'].forEach(k=>{
+    const b = document.getElementById('btn-chart-'+k);
+    if(b) b.style.cssText = k===tipo ? 'background:var(--verde);color:white;border:none;font-size:11px' : 'background:var(--gris);border:1px solid var(--gris2);font-size:11px';
+  });
+  initChart();
+}
+
+function guardarRegistroPrecio(){
+  const fecha  = document.getElementById('reg-fecha').value;
+  const precio = parseFloat(document.getElementById('reg-precio').value);
+  if(!fecha||!precio){ toast('Fecha y precio son obligatorios','e'); return; }
+  if(!db.registrosPrecios) db.registrosPrecios=[];
+  const catMap = {'Ternero 150–180 kg':'ternero','Ternero 130–150 kg':'ternero','Gordo liviano 220 kg':'gordo','Novillo gordo 280 kg':'gordo','Maíz (US$/tn)':'maiz','Spread ternero-gordo':'spread'};
+  db.registrosPrecios.push({id:uid(),fecha,cat:catMap[document.getElementById('reg-cat').value]||'ternero',catLabel:document.getElementById('reg-cat').value,precio,fuente:document.getElementById('reg-fuente').value.trim(),notas:document.getElementById('reg-notas').value.trim()});
+  saveDB(); closeModal('modal-precio-registro');
+  renderRegistros(); initChart();
+  toast('Registro guardado y gráfico actualizado');
+}
+
+function renderRegistros(){
+  const wrap = document.getElementById('tabla-registros-wrap');
+  if(!wrap) return;
+  const lista = db.registrosPrecios||[];
+  if(!lista.length){ wrap.innerHTML='<div class="empty" style="padding:20px"><p style="font-size:13px">Agregá tus propios registros de precios para ver la evolución en el gráfico.</p></div>'; return; }
+  wrap.innerHTML='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Categoría</th><th>Precio</th><th>Fuente</th><th>Notas</th><th></th></tr></thead><tbody>'+
+    [...lista].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(r=>`<tr>
+      <td>${r.fecha}</td><td>${r.catLabel}</td><td><strong>${r.precio.toFixed(2)}</strong></td>
+      <td style="font-size:12px;color:var(--txt3)">${r.fuente||'—'}</td>
+      <td style="font-size:12px;color:var(--txt3)">${r.notas||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="borrarRegistro('${r.id}')">✕</button></td>
+    </tr>`).join('')+'</tbody></table></div>';
+}
+
+function borrarRegistro(id){
+  if(!confirm('¿Eliminar este registro?')) return;
+  db.registrosPrecios=(db.registrosPrecios||[]).filter(r=>r.id!==id);
+  saveDB(); renderRegistros(); initChart();
+}
+// =============================================================
+
+loadDB();
+initMercado();
+fetchDolar();
+</script>
+</body>
+</html>
