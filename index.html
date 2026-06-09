@@ -9,7 +9,25 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+/* AUTH */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f3d26 0%,#1a5c38 50%,#2d7a50 100%);padding:20px}
+.auth-box{background:white;border-radius:16px;padding:36px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.auth-logo{font-family:'Syne',sans-serif;font-weight:700;font-size:28px;color:var(--verde);margin-bottom:6px}
+.auth-logo span{color:#52b788}
+.auth-sub{font-size:13px;color:var(--txt3);margin-bottom:28px}
+.auth-tabs{display:flex;border-bottom:1px solid var(--gris2);margin-bottom:24px}
+.auth-tab{flex:1;padding:10px;text-align:center;font-size:13px;font-family:'Syne',sans-serif;font-weight:500;color:var(--txt3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.auth-tab.active{color:var(--verde);border-bottom-color:var(--verde)}
+.role-badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase}
+.role-admin{background:#fef3c7;color:#92400e}
+.role-socio{background:#dbeafe;color:#1e40af}
+.role-empleado{background:#d1fae5;color:#065f46}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--gris2);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite;margin-right:6px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pendiente-chip{background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;margin-left:4px}
+</style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --verde:#1a5c38;--verde2:#2d7a50;--verde3:#52b788;--verde-claro:#e8f5ee;
@@ -128,12 +146,43 @@ tr:last-child td{border-bottom:none}
 </style>
 </head>
 <body>
-<div class="app">
+<!-- ======== PANTALLA DE LOGIN ======== -->
+<div id="auth-screen" class="auth-wrap" style="display:none">
+  <div class="auth-box">
+    <div class="auth-logo">Campo<span>IO</span></div>
+    <div class="auth-sub">Gestión agroganadera · La Cruz Escondida</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="showAuthTab('login')">Ingresar</div>
+      <div class="auth-tab" onclick="showAuthTab('register')">Registrarse</div>
+    </div>
+    <div id="tab-login">
+      <div class="field" style="margin-bottom:12px"><label>Email</label><input id="login-email" type="email" placeholder="tu@email.com" autocomplete="email"></div>
+      <div class="field" style="margin-bottom:20px"><label>Contraseña</label><input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" onclick="doLogin()" id="btn-login">Ingresar</button>
+      <div id="login-err" style="color:var(--rojo);font-size:12px;margin-top:10px;text-align:center"></div>
+    </div>
+    <div id="tab-register" style="display:none">
+      <div class="field" style="margin-bottom:12px"><label>Nombre completo</label><input id="reg-nombre" type="text" placeholder="Nicolás Menzella"></div>
+      <div class="field" style="margin-bottom:12px"><label>Email</label><input id="reg-email" type="email" placeholder="tu@email.com"></div>
+      <div class="field" style="margin-bottom:20px"><label>Contraseña (mínimo 6 caracteres)</label><input id="reg-pass" type="password" placeholder="••••••••"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" onclick="doRegister()">Crear cuenta</button>
+      <p style="font-size:11px;color:var(--txt3);margin-top:10px;text-align:center">El administrador asignará tu rol luego del registro.</p>
+      <div id="reg-err" style="color:var(--rojo);font-size:12px;margin-top:8px;text-align:center"></div>
+      <div id="reg-ok" style="color:var(--verde);font-size:12px;margin-top:8px;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="app-screen" style="display:none">
 
 <div class="topbar">
   <div class="topbar-logo">Campo<span>IO</span></div>
   <div class="topbar-est" id="btn-estancia" onclick="openModal('modal-estancia')">🌿 Mi establecimiento ▾</div>
-  <span style="font-size:11px;opacity:.5">v1.1</span>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="topbar-nombre" style="font-size:12px;opacity:.8"></span>
+    <span id="topbar-role" class="role-badge role-empleado"></span>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:white;border:none;font-size:11px;padding:4px 10px" onclick="doLogout()">Salir</button>
+  </div>
 </div>
 
 <div class="tabs">
@@ -145,6 +194,7 @@ tr:last-child td{border-bottom:none}
   <div class="tab" onclick="switchTab('sanidad')">Sanidad</div>
   <div class="tab" onclick="switchTab('importar')">Importar</div>
   <div class="tab" onclick="switchTab('mercado')">💰 Mercado</div>
+  <div class="tab" id="tab-admin" onclick="switchTab('admin')" style="display:none">⚙ Admin</div>
 </div>
 
 <div class="content">
@@ -548,8 +598,60 @@ tr:last-child td{border-bottom:none}
 
 </div><!-- /screen-mercado -->
 
+<!-- ADMIN -->
+<div id="screen-admin" class="screen">
+  <h2 style="font-size:18px;margin-bottom:4px">Panel de administración</h2>
+  <p style="font-size:12px;color:var(--txt3);margin-bottom:14px">Usuarios, roles y solicitudes de borrado</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">👥 Usuarios del establecimiento <button class="btn btn-primary btn-sm" onclick="openModal('modal-invitar')">+ Invitar</button></div>
+      <div id="lista-usuarios"><div style="padding:20px;text-align:center;color:var(--txt3)"><span class="spinner"></span>Cargando...</div></div>
+    </div>
+    <div class="card">
+      <div class="sec-title" style="font-size:14px">🗑 Solicitudes de borrado pendientes</div>
+      <div id="lista-solicitudes"><div class="empty"><p style="font-size:13px">Sin solicitudes pendientes.</p></div></div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /app -->
+
+<!-- Invitar usuario -->
+<div id="modal-invitar" class="modal-bg">
+<div class="modal">
+  <h3>Invitar usuario al establecimiento</h3>
+  <p style="font-size:12px;color:var(--txt3);margin-bottom:14px">El usuario debe registrarse primero en la app con su email. Luego ingresás su email acá para darle acceso.</p>
+  <div class="form-row">
+    <div class="field"><label>Email del usuario *</label><input id="inv-email" type="email" placeholder="empleado@email.com"></div>
+    <div class="field"><label>Rol</label>
+      <select id="inv-rol">
+        <option value="empleado">Empleado — carga datos, no borra</option>
+        <option value="socio">Socio — edita todo, pide permiso para borrar</option>
+        <option value="admin">Admin — acceso total</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-invitar')">Cancelar</button>
+    <button class="btn btn-primary" onclick="invitarUsuario()">Dar acceso</button>
+  </div>
+</div>
+</div>
+
+<!-- Solicitar borrado (socios) -->
+<div id="modal-solicitar-borrado" class="modal-bg">
+<div class="modal">
+  <h3>Solicitar eliminación de registro</h3>
+  <p style="font-size:13px;color:var(--txt3);margin-bottom:14px">Como socio no podés eliminar directamente. Tu solicitud será enviada al administrador.</p>
+  <input type="hidden" id="sol-tabla"><input type="hidden" id="sol-id">
+  <div class="form-row c1"><div class="field"><label>Motivo *</label><textarea id="sol-motivo" placeholder="¿Por qué querés eliminar este registro?"></textarea></div></div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeModal('modal-solicitar-borrado')">Cancelar</button>
+    <button class="btn btn-warning" onclick="enviarSolicitudBorrado()">Enviar solicitud al admin</button>
+  </div>
+</div>
+</div>
 
 <!-- Modal actualizar precios -->
 <div id="modal-precios" class="modal-bg">
@@ -830,452 +932,781 @@ tr:last-child td{border-bottom:none}
 <div id="toast" class="toast"></div>
 
 <script>
-// =============================================================
-// BASE DE DATOS
-// =============================================================
-const DB_KEY = 'campioapp_v2';
-let db = { estancia:{nombre:'Mi establecimiento',dueno:'',cuit:'',provincia:'Entre Ríos',partido:'',ha:0,renspa:''}, animales:[], lotes:[], cultivos:[], pesajes:[], sanidad:[] };
+// ============================================================
+// SUPABASE INIT
+// ============================================================
+const SUPA_URL = 'https://awmjksdvdbkjyrwekuef.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF3bWprc2R2ZGJranlyd2VrdWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NjY0ODcsImV4cCI6MjA5NjU0MjQ4N30.R5_tebI88m68q_H-IoP8-nmAoSjSP29ewT1aFWYbCp0';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
-function saveDB(){ try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){} }
-function loadDB(){
-  try{ const s=localStorage.getItem(DB_KEY); if(s) db=JSON.parse(s); }catch(e){}
-  // migrar v1 si existe
-  try{
-    const old=localStorage.getItem('campioapp_v1');
-    if(old && !localStorage.getItem(DB_KEY+'_migrated')){
-      const o=JSON.parse(old);
-      ['animales','lotes','cultivos','pesajes','sanidad'].forEach(k=>{ if(o[k]&&o[k].length) db[k]=[...db[k],...o[k]]; });
-      if(o.estancia&&o.estancia.nombre!=='Mi establecimiento') db.estancia=o.estancia;
-      saveDB(); localStorage.setItem(DB_KEY+'_migrated','1');
+// Estado global
+let sesion = null, perfil = null, estId = null;
+let lotesList=[], gruposList=[], animalesList=[];
+let tcActual = 1450;
+
+// ============================================================
+// AUTH
+// ============================================================
+function showAuthTab(tab){
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',i===(tab==='login'?0:1)));
+  document.getElementById('tab-login').style.display=tab==='login'?'block':'none';
+  document.getElementById('tab-register').style.display=tab==='register'?'block':'none';
+}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-err');
+  err.textContent='';
+  if(!email||!pass){err.textContent='Completá email y contraseña.';return;}
+  const btn=document.getElementById('btn-login');
+  btn.textContent='Ingresando...';btn.disabled=true;
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  btn.textContent='Ingresar';btn.disabled=false;
+  if(error){err.textContent='Error: '+(error.message==='Invalid login credentials'?'Email o contraseña incorrectos.':error.message);return;}
+  await initApp(data.session);
+}
+
+async function doRegister(){
+  const nombre=document.getElementById('reg-nombre').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const pass=document.getElementById('reg-pass').value;
+  const err=document.getElementById('reg-err');
+  const ok=document.getElementById('reg-ok');
+  err.textContent='';ok.textContent='';
+  if(!nombre||!email||!pass){err.textContent='Completá todos los campos.';return;}
+  if(pass.length<6){err.textContent='La contraseña debe tener al menos 6 caracteres.';return;}
+  const {error}=await sb.auth.signUp({email,password:pass,options:{data:{nombre}}});
+  if(error){err.textContent='Error: '+error.message;return;}
+  ok.textContent='¡Cuenta creada! Revisá tu email para confirmar. Luego pedile al administrador que te asigne acceso al establecimiento.';
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+  sesion=null;perfil=null;estId=null;
+  document.getElementById('app-screen').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
+}
+
+async function initApp(session){
+  sesion=session;
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app-screen').style.display='flex';
+  // Cargar perfil
+  const {data:p}=await sb.from('perfiles').select('*').eq('id',session.user.id).single();
+  perfil=p;
+  actualizarTopbarUser();
+  // Buscar establecimiento: primero como dueño, después como acceso
+  const {data:ests}=await sb.from('establecimientos').select('*').eq('dueno_id',session.user.id).limit(1);
+  if(ests&&ests.length>0){
+    estId=ests[0].id;
+    actualizarTopbarEst(ests[0].nombre);
+  } else {
+    const {data:acc}=await sb.from('establecimiento_accesos').select('*,establecimientos(*)').eq('usuario_id',session.user.id).eq('activo',true).limit(1);
+    if(acc&&acc.length>0){
+      estId=acc[0].establecimiento_id;
+      // Ajustar rol del perfil según el acceso
+      if(acc[0].rol) perfil={...perfil,rol:acc[0].rol};
+      actualizarTopbarUser();
+      actualizarTopbarEst(acc[0].establecimientos?.nombre||'Mi establecimiento');
     }
-  }catch(e){}
-  renderAll();
+  }
+  // Mostrar tab admin si corresponde
+  if(perfil&&perfil.rol==='admin'){
+    document.getElementById('tab-admin').style.display='';
+  }
+  if(estId){
+    await cargarDatos();
+  } else {
+    // Admin sin establecimiento: abrir modal para crear uno
+    if(!perfil||perfil.rol==='admin'){
+      toast('Primero configurá tu establecimiento');
+      openModal('modal-estancia');
+    }
+  }
+  fetchDolar();
   setToday();
 }
 
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function setToday(){ const h=new Date().toISOString().slice(0,10); ['p-fecha','s-fecha','fecha-cop'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=h;}); }
-
-// =============================================================
-// NAVEGACIÓN
-// =============================================================
-const TABS = ['inicio','ganado','lotes','cultivos','pesajes','sanidad','importar','mercado'];
-function switchTab(name){
-  TABS.forEach((t,i)=>{ document.querySelectorAll('.tab')[i].classList.toggle('active',t===name); });
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('screen-'+name).classList.add('active');
-  if(name==='ganado') mostrarLista();
-  if(name==='lotes') setTimeout(()=>{ iniciarMapa(); renderLotesEnMapa(); }, 80);
-  if(name==='mercado'){ recalcular(); setTimeout(()=>{ initChart(); renderRegistros(); }, 100); }
-  renderAll();
+function actualizarTopbarEst(nombre){
+  document.getElementById('btn-estancia').textContent='🌿 '+nombre+' ▾';
+}
+function actualizarTopbarUser(){
+  if(!perfil)return;
+  document.getElementById('topbar-nombre').textContent=perfil.nombre||perfil.email||'';
+  const rb=document.getElementById('topbar-role');
+  rb.textContent=perfil.rol||'empleado';
+  rb.className='role-badge role-'+(perfil.rol||'empleado');
 }
 
-// =============================================================
-// MODALES
-// =============================================================
-function openModal(id){
-  document.getElementById(id).classList.add('open');
-  poblarSelectsLotes(); poblarDatalistCars();
-  if(id==='modal-estancia'){ const e=db.estancia; ['nombre','dueno','cuit','partido','renspa'].forEach(f=>{ const el=document.getElementById('e-'+f);if(el)el.value=e[f]||''; }); document.getElementById('e-ha').value=e.ha||''; try{document.getElementById('e-prov').value=e.provincia;}catch(ex){} }
-  if(id==='modal-config-campo'){ const c=getCfgCampo(); document.getElementById('cfg-lat').value=c.lat||''; document.getElementById('cfg-lng').value=c.lng||''; document.getElementById('cfg-nombre').value=c.nombre||''; try{document.getElementById('cfg-zoom').value=c.zoom||13;}catch(ex){} }
-}
-function closeModal(id){ document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); }));
-
-function poblarSelectsLotes(){
-  ['a-lote','c-lote','p-lote','s-lote'].forEach(sid=>{
-    const s=document.getElementById(sid); if(!s) return;
-    const first=s.options[0];
-    s.innerHTML=''; s.appendChild(first);
-    db.lotes.forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=l.nombre; s.appendChild(o); });
-  });
-}
-function poblarDatalistCars(){
-  ['dl-cars','dl-cars2'].forEach(id=>{ const dl=document.getElementById(id); if(!dl) return; dl.innerHTML=db.animales.map(a=>`<option value="${a.caravana}">${a.caravana} — ${a.raza}</option>`).join(''); });
-}
-function getLoteNombre(id){ return id?(db.lotes.find(l=>l.id===id)||{}).nombre||'':'' }
-
-// =============================================================
-// GUARDAR DATOS
-// =============================================================
-function guardarAnimal(){
-  const car=document.getElementById('a-car').value.trim();
-  if(!car){toast('Caravana obligatoria','e');return;}
-  const lId=document.getElementById('a-lote').value;
-  db.animales.push({id:uid(),caravana:car,caravanaE:document.getElementById('a-care').value.trim(),categoria:document.getElementById('a-cat').value,sexo:document.getElementById('a-sex').value,raza:document.getElementById('a-raza').value,peso:parseFloat(document.getElementById('a-peso').value)||0,nacimiento:document.getElementById('a-nac').value,lote:getLoteNombre(lId),loteId:lId,estado:document.getElementById('a-estado').value,madre:document.getElementById('a-madre').value.trim(),padre:document.getElementById('a-padre').value.trim(),procedencia:document.getElementById('a-proc').value.trim(),notas:document.getElementById('a-notas').value.trim(),fechaCarga:new Date().toISOString().slice(0,10)});
-  saveDB(); closeModal('modal-animal'); renderAll(); toast('Animal guardado');
-  ['a-car','a-care','a-peso','a-nac','a-madre','a-padre','a-proc','a-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-}
-
-function guardarLoteManual(){
-  const n=document.getElementById('lman-nombre').value.trim();
-  if(!n){toast('Nombre obligatorio','e');return;}
-  db.lotes.push({id:uid(),nombre:n,ha:parseFloat(document.getElementById('lman-ha').value)||0,tipo:document.getElementById('lman-tipo').value,suelo:document.getElementById('lman-suelo').value,color:document.getElementById('lman-color').value,notas:document.getElementById('lman-notas').value.trim(),geojson:null});
-  saveDB(); closeModal('modal-lote-manual'); renderAll(); toast('Lote guardado');
-}
-
-function guardarCultivo(){
-  const lId=document.getElementById('c-lote').value;
-  db.cultivos.push({id:uid(),cultivo:document.getElementById('c-cult').value,loteId:lId,lote:getLoteNombre(lId),variedad:document.getElementById('c-var').value.trim(),siembra:document.getElementById('c-siem').value,ha:parseFloat(document.getElementById('c-ha').value)||0,estado:document.getElementById('c-estado').value.trim(),campaña:document.getElementById('c-camp').value.trim(),notas:document.getElementById('c-notas').value.trim()});
-  saveDB(); closeModal('modal-cultivo'); renderAll(); toast('Cultivo guardado');
-}
-
-function guardarPesaje(){
-  const car=document.getElementById('p-car').value.trim();
-  if(!car){toast('Caravana obligatoria','e');return;}
-  const lId=document.getElementById('p-lote').value;
-  const pesoN=parseFloat(document.getElementById('p-peso').value)||0;
-  const fechaN=document.getElementById('p-fecha').value;
-  let ganancia='';
-  const ant=db.pesajes.filter(p=>p.caravana===car).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
-  if(ant&&ant.peso&&ant.fecha&&fechaN){
-    const dias=Math.max(1,Math.round((new Date(fechaN)-new Date(ant.fecha))/86400000));
-    const g=(pesoN-ant.peso)/dias;
-    if(g>-5&&g<5) ganancia=g.toFixed(3)+' kg/día';
+// Verificar sesión al cargar la página
+(async()=>{
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){
+    await initApp(session);
+  } else {
+    document.getElementById('auth-screen').style.display='flex';
   }
-  db.pesajes.push({id:uid(),caravana:car,fecha:fechaN,peso:pesoN,lote:getLoteNombre(lId),metodo:document.getElementById('p-met').value,ganancia,notas:document.getElementById('p-notas').value.trim()});
-  saveDB(); closeModal('modal-pesaje'); renderAll(); toast('Pesaje guardado');
-  ['p-car','p-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+})();
+
+// ============================================================
+// NAVEGACIÓN
+// ============================================================
+const TABS=['inicio','ganado','lotes','cultivos','pesajes','sanidad','importar','mercado','admin'];
+function switchTab(name){
+  TABS.forEach((t,i)=>{
+    const el=document.querySelectorAll('.tab')[i];
+    if(el)el.classList.toggle('active',t===name);
+  });
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const sc=document.getElementById('screen-'+name);
+  if(sc)sc.classList.add('active');
+  if(name==='ganado') renderTablaGanado(filtroActivo,busqActiva);
+  if(name==='lotes') setTimeout(()=>{iniciarMapa();renderLotesEnMapa();},80);
+  if(name==='mercado'){recalcular();setTimeout(()=>{initChart();renderRegistrosPrecio();},100);}
+  if(name==='admin') cargarAdmin();
 }
 
-function guardarSanidad(){
-  const lId=document.getElementById('s-lote').value;
-  const dias=parseInt(document.getElementById('s-prox').value)||0;
-  const fecha=document.getElementById('s-fecha').value;
-  let prox='';
-  if(dias&&fecha){const d=new Date(fecha);d.setDate(d.getDate()+dias);prox=d.toISOString().slice(0,10);}
-  db.sanidad.push({id:uid(),tipo:document.getElementById('s-tipo').value,fecha,caravana:document.getElementById('s-car').value.trim(),lote:getLoteNombre(lId),producto:document.getElementById('s-prod').value.trim(),dosis:document.getElementById('s-dosis').value.trim(),proximo:prox,notas:document.getElementById('s-notas').value.trim()});
-  saveDB(); closeModal('modal-sanidad'); renderAll(); toast('Evento guardado');
+function setToday(){
+  const h=new Date().toISOString().slice(0,10);
+  ['p-fecha','s-fecha','fecha-cop','reg-fecha'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=h;});
 }
 
-function guardarEstancia(){
-  db.estancia={nombre:document.getElementById('e-nombre').value.trim()||'Mi establecimiento',dueno:document.getElementById('e-dueno').value.trim(),cuit:document.getElementById('e-cuit').value.trim(),provincia:document.getElementById('e-prov').value,partido:document.getElementById('e-partido').value.trim(),ha:parseFloat(document.getElementById('e-ha').value)||0,renspa:document.getElementById('e-renspa').value.trim()};
-  saveDB(); closeModal('modal-estancia'); renderAll(); toast('Establecimiento guardado');
-}
-
-function borrar(tipo,id){ if(!confirm('¿Eliminar?'))return; db[tipo]=db[tipo].filter(x=>x.id!==id); saveDB(); renderAll(); toast('Eliminado'); }
-
-// =============================================================
-// RENDER
-// =============================================================
-function renderAll(){
-  const totalHa=db.lotes.reduce((s,l)=>s+(l.ha||0),0);
-  document.getElementById('btn-estancia').textContent='🌿 '+(db.estancia.nombre||'Mi establecimiento')+' ▾';
-  document.getElementById('s-animales').textContent=db.animales.length;
-  document.getElementById('s-animales-sub').textContent=db.animales.filter(a=>a.estado==='Gestante').length+' gestantes';
-  document.getElementById('s-lotes').textContent=db.lotes.length;
-  document.getElementById('s-lotes-sub').textContent=totalHa.toLocaleString()+' ha';
-  document.getElementById('s-cultivos').textContent=db.cultivos.length;
-  document.getElementById('s-pesajes').textContent=db.pesajes.length;
-  document.getElementById('ganado-count').textContent=db.animales.length+' animales';
-  document.getElementById('lotes-count').textContent=db.lotes.length+' lotes · '+totalHa.toLocaleString()+' ha';
-  document.getElementById('cultivos-count').textContent=db.cultivos.length+' registros';
-  renderTablaGanado(filtroActivo,busqActiva);
-  renderLotes();
-  renderCultivos();
-  renderPesajes();
-  renderSanidad();
-  renderAlertas();
+// ============================================================
+// CARGAR DATOS
+// ============================================================
+async function cargarDatos(){
+  if(!estId)return;
+  await Promise.all([cargarLotes(),cargarGrupos(),cargarAnimales(),cargarCultivos(),cargarPesajes(),cargarSanidad()]);
+  renderStats();
   actualizarPasos();
 }
 
-let filtroActivo='todos', busqActiva='';
+async function cargarLotes(){
+  const {data}=await sb.from('lotes').select('*').eq('establecimiento_id',estId).order('nombre');
+  lotesList=data||[];renderLotes();
+}
+async function cargarGrupos(){
+  const {data}=await sb.from('grupos_lotes').select('*').eq('establecimiento_id',estId).order('nombre');
+  gruposList=data||[];
+}
+async function cargarAnimales(){
+  const {data}=await sb.from('animales').select('*,perfiles(nombre)').eq('establecimiento_id',estId).order('caravana');
+  animalesList=data||[];
+  renderTablaGanado(filtroActivo,busqActiva);
+  document.getElementById('ganado-count').textContent=animalesList.length+' animales';
+}
+async function cargarCultivos(){
+  const {data}=await sb.from('cultivos').select('*,perfiles(nombre)').eq('establecimiento_id',estId).order('created_at',{ascending:false});
+  renderCultivos(data||[]);
+}
+async function cargarPesajes(){
+  const {data}=await sb.from('pesajes').select('*,perfiles(nombre)').eq('establecimiento_id',estId).order('fecha',{ascending:false});
+  renderPesajes(data||[]);
+  document.getElementById('s-pesajes').textContent=data?.length||0;
+}
+async function cargarSanidad(){
+  const {data}=await sb.from('sanidad').select('*,perfiles(nombre)').eq('establecimiento_id',estId).order('fecha',{ascending:false});
+  renderSanidad(data||[]);
+  renderAlertas(data||[]);
+}
+
+function renderStats(){
+  const totalHa=lotesList.reduce((s,l)=>s+(parseFloat(l.ha)||0),0);
+  document.getElementById('s-animales').textContent=animalesList.length;
+  document.getElementById('s-animales-sub').textContent=animalesList.filter(a=>a.estado==='Gestante').length+' gestantes';
+  document.getElementById('s-lotes').textContent=lotesList.length;
+  document.getElementById('s-lotes-sub').textContent=totalHa.toLocaleString()+' ha';
+  // cultivos count async
+  if(estId) sb.from('cultivos').select('id',{count:'exact'}).eq('establecimiento_id',estId).then(({count})=>{document.getElementById('s-cultivos').textContent=count||0;});
+}
+
+function actualizarPasos(){
+  const hayDatos=animalesList.length>0||lotesList.length>0;
+  const el=document.getElementById('card-pasos');
+  if(el)el.style.display=hayDatos?'none':'block';
+}
+
+// ============================================================
+// MODALES
+// ============================================================
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  poblarSelectsLotes();
+  poblarSelectsGrupos();
+  poblarDatalistCars();
+  if(id==='modal-estancia') cargarDatosEstancia();
+  if(id==='modal-config-campo'){const c=getCfgCampo();document.getElementById('cfg-lat').value=c.lat||'';document.getElementById('cfg-lng').value=c.lng||'';}
+  if(id==='modal-precios'){const p=getPrecios();document.getElementById('pr-t1').value=p.t1;document.getElementById('pr-t2').value=p.t2;document.getElementById('pr-g1').value=p.g1;document.getElementById('pr-g2').value=p.g2;document.getElementById('pr-maiz-mdo').value=p.maizMdo;document.getElementById('pr-tc').value=p.tc;}
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+function poblarSelectsLotes(){
+  ['a-lote','c-lote','p-lote','s-lote'].forEach(sid=>{
+    const s=document.getElementById(sid);if(!s)return;
+    const first=s.options[0];s.innerHTML='';s.appendChild(first);
+    lotesList.forEach(l=>{const o=document.createElement('option');o.value=l.id;o.textContent=l.nombre;s.appendChild(o);});
+  });
+}
+function poblarSelectsGrupos(){
+  ['lm-grupo','lman-grupo'].forEach(sid=>{
+    const s=document.getElementById(sid);if(!s)return;
+    s.innerHTML='<option value="">Sin grupo</option>';
+    gruposList.forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=g.nombre;s.appendChild(o);});
+  });
+}
+function poblarDatalistCars(){
+  ['dl-cars','dl-cars2'].forEach(id=>{const dl=document.getElementById(id);if(!dl)return;dl.innerHTML=animalesList.map(a=>`<option value="${a.caravana}">${a.caravana}</option>`).join('');});
+}
+async function cargarDatosEstancia(){
+  if(!estId)return;
+  const {data}=await sb.from('establecimientos').select('*').eq('id',estId).single();
+  if(!data)return;
+  document.getElementById('e-nombre').value=data.nombre||'';
+  document.getElementById('e-ha').value=data.ha_totales||'';
+  document.getElementById('e-renspa').value=data.renspa||'';
+  document.getElementById('e-cuit').value=data.cuit||'';
+  document.getElementById('e-partido').value=data.partido||'';
+  try{document.getElementById('e-prov').value=data.provincia||'Entre Ríos';}catch(ex){}
+}
+
+// ============================================================
+// GUARDAR DATOS
+// ============================================================
+async function guardarAnimal(){
+  if(!estId){toast('Configurá el establecimiento primero','e');return;}
+  const car=document.getElementById('a-car').value.trim();
+  if(!car){toast('Caravana obligatoria','e');return;}
+  const row={establecimiento_id:estId,caravana:car,caravana_electronica:document.getElementById('a-care').value.trim()||null,categoria:document.getElementById('a-cat').value,sexo:document.getElementById('a-sex').value,raza:document.getElementById('a-raza').value,peso:parseFloat(document.getElementById('a-peso').value)||0,nacimiento:document.getElementById('a-nac').value||null,lote_id:document.getElementById('a-lote').value||null,estado:document.getElementById('a-estado').value,madre:document.getElementById('a-madre').value.trim()||null,padre:document.getElementById('a-padre').value.trim()||null,procedencia:document.getElementById('a-proc').value.trim()||null,notas:document.getElementById('a-notas').value.trim()||null,cargado_por:sesion.user.id,validado:perfil?.rol==='admin'};
+  const {error}=await sb.from('animales').insert(row);
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-animal');
+  ['a-car','a-care','a-peso','a-nac','a-madre','a-padre','a-proc','a-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  await cargarAnimales();renderStats();
+  toast('Animal guardado');
+}
+
+async function guardarGrupo(){
+  if(!estId)return;
+  const n=document.getElementById('grp-nombre').value.trim();
+  if(!n){toast('Nombre obligatorio','e');return;}
+  const {error}=await sb.from('grupos_lotes').insert({establecimiento_id:estId,nombre:n,color:document.getElementById('grp-color').value,descripcion:document.getElementById('grp-desc').value.trim()||null});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-grupo-lote');document.getElementById('grp-nombre').value='';document.getElementById('grp-desc').value='';
+  await cargarGrupos();toast('Grupo creado');
+}
+
+async function guardarLoteManual(){
+  if(!estId){toast('Configurá el establecimiento primero','e');return;}
+  const n=document.getElementById('lman-nombre').value.trim();
+  if(!n){toast('Nombre obligatorio','e');return;}
+  const row={establecimiento_id:estId,nombre:n,ha:parseFloat(document.getElementById('lman-ha').value)||0,grupo_id:document.getElementById('lman-grupo').value||null,tipo:document.getElementById('lman-tipo').value,suelo:document.getElementById('lman-suelo').value,color:document.getElementById('lman-color').value,arrendado:document.getElementById('lman-arrendado').value==='true',notas:document.getElementById('lman-notas').value.trim()||null,geojson:null};
+  const {error}=await sb.from('lotes').insert(row);
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-lote-manual');
+  await cargarLotes();renderStats();toast('Lote guardado');
+}
+
+async function guardarLoteMapa(){
+  if(!estId){toast('Configurá el establecimiento primero','e');return;}
+  const nombre=document.getElementById('lm-nombre').value.trim();
+  if(!nombre){toast('Nombre obligatorio','e');return;}
+  if(!lotePoligTemp)return;
+  const color=document.getElementById('lm-color').value;
+  lotePoligTemp.setStyle({color,fillColor:color,fillOpacity:0.28});
+  const latlngs=lotePoligTemp.getLatLngs()[0];
+  const ha=parseFloat(document.getElementById('lm-ha').value)||calcHa(latlngs);
+  const geojson=lotePoligTemp.toGeoJSON();
+  const row={establecimiento_id:estId,nombre,ha:parseFloat(ha.toFixed(2)),grupo_id:document.getElementById('lm-grupo').value||null,tipo:document.getElementById('lm-tipo').value,suelo:document.getElementById('lm-suelo').value,color,arrendado:document.getElementById('lm-arrendado').value==='true',arrendatario:document.getElementById('lm-arrendatario').value.trim()||null,notas:document.getElementById('lm-notas').value.trim()||null,geojson};
+  const {data,error}=await sb.from('lotes').insert(row).select().single();
+  if(error){toast('Error: '+error.message,'e');return;}
+  lotePoligTemp.options.loteId=data.id;
+  lotePoligTemp.bindPopup(buildPopup(data));
+  lotePoligTemp=null;
+  closeModal('modal-lote-mapa');
+  await cargarLotes();renderStats();
+  toast('Lote "'+nombre+'" guardado');
+}
+function cancelarLoteMapa(){if(lotePoligTemp){drawnItems.removeLayer(lotePoligTemp);lotePoligTemp=null;}closeModal('modal-lote-mapa');}
+
+async function guardarCultivo(){
+  if(!estId)return;
+  const {error}=await sb.from('cultivos').insert({establecimiento_id:estId,cultivo:document.getElementById('c-cult').value,lote_id:document.getElementById('c-lote').value||null,variedad:document.getElementById('c-var').value.trim()||null,siembra:document.getElementById('c-siem').value||null,ha:parseFloat(document.getElementById('c-ha').value)||0,estado:document.getElementById('c-estado').value.trim()||null,campana:document.getElementById('c-camp').value.trim()||null,notas:document.getElementById('c-notas').value.trim()||null,cargado_por:sesion.user.id});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-cultivo');await cargarCultivos();toast('Cultivo guardado');
+}
+
+async function guardarPesaje(){
+  if(!estId)return;
+  const car=document.getElementById('p-car').value.trim();
+  if(!car){toast('Caravana obligatoria','e');return;}
+  const pesoN=parseFloat(document.getElementById('p-peso').value)||0;
+  const fechaN=document.getElementById('p-fecha').value;
+  const {data:ant}=await sb.from('pesajes').select('peso,fecha').eq('establecimiento_id',estId).eq('caravana',car).order('fecha',{ascending:false}).limit(1);
+  let ganancia=null;
+  if(ant&&ant.length&&ant[0].fecha&&fechaN){
+    const dias=Math.max(1,Math.round((new Date(fechaN)-new Date(ant[0].fecha))/86400000));
+    const g=(pesoN-ant[0].peso)/dias;
+    if(g>-5&&g<5)ganancia=g.toFixed(3)+' kg/día';
+  }
+  const {error}=await sb.from('pesajes').insert({establecimiento_id:estId,caravana:car,lote_id:document.getElementById('p-lote').value||null,fecha:fechaN,peso:pesoN,metodo:document.getElementById('p-met').value,ganancia,notas:document.getElementById('p-notas').value.trim()||null,cargado_por:sesion.user.id,validado:perfil?.rol==='admin'});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-pesaje');document.getElementById('p-car').value='';document.getElementById('p-notas').value='';
+  await cargarPesajes();toast('Pesaje guardado');
+}
+
+async function guardarSanidad(){
+  if(!estId)return;
+  const dias=parseInt(document.getElementById('s-prox').value)||0;
+  const fecha=document.getElementById('s-fecha').value;
+  let proximo=null;
+  if(dias&&fecha){const d=new Date(fecha);d.setDate(d.getDate()+dias);proximo=d.toISOString().slice(0,10);}
+  const {error}=await sb.from('sanidad').insert({establecimiento_id:estId,tipo:document.getElementById('s-tipo').value,fecha,caravana:document.getElementById('s-car').value.trim()||null,lote_id:document.getElementById('s-lote').value||null,producto:document.getElementById('s-prod').value.trim()||null,dosis:document.getElementById('s-dosis').value.trim()||null,proximo,notas:document.getElementById('s-notas').value.trim()||null,cargado_por:sesion.user.id,validado:perfil?.rol==='admin'});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-sanidad');await cargarSanidad();toast('Evento sanitario guardado');
+}
+
+async function guardarEstancia(){
+  const n=document.getElementById('e-nombre').value.trim()||'Mi establecimiento';
+  if(!estId){
+    const {data,error}=await sb.from('establecimientos').insert({nombre:n,dueno_id:sesion.user.id,provincia:document.getElementById('e-prov').value,partido:document.getElementById('e-partido').value.trim()||null,ha_totales:parseFloat(document.getElementById('e-ha').value)||0,renspa:document.getElementById('e-renspa').value.trim()||null,cuit:document.getElementById('e-cuit').value.trim()||null}).select().single();
+    if(error){toast('Error: '+error.message,'e');return;}
+    estId=data.id;actualizarTopbarEst(n);
+    await cargarDatos();
+  } else {
+    const {error}=await sb.from('establecimientos').update({nombre:n,provincia:document.getElementById('e-prov').value,partido:document.getElementById('e-partido').value.trim()||null,ha_totales:parseFloat(document.getElementById('e-ha').value)||0,renspa:document.getElementById('e-renspa').value.trim()||null,cuit:document.getElementById('e-cuit').value.trim()||null}).eq('id',estId);
+    if(error){toast('Error: '+error.message,'e');return;}
+    actualizarTopbarEst(n);
+  }
+  closeModal('modal-estancia');toast('Establecimiento guardado');
+}
+
+// ============================================================
+// BORRAR CON CONTROL DE ROLES
+// ============================================================
+async function borrar(tabla,id){
+  if(perfil?.rol==='empleado'){toast('No tenés permiso para eliminar registros','e');return;}
+  if(perfil?.rol==='socio'){
+    document.getElementById('sol-tabla').value=tabla;
+    document.getElementById('sol-id').value=id;
+    openModal('modal-solicitar-borrado');
+    return;
+  }
+  if(!confirm('¿Eliminar este registro? No se puede deshacer.'))return;
+  const {error}=await sb.from(tabla).delete().eq('id',id);
+  if(error){toast('Error: '+error.message,'e');return;}
+  toast('Eliminado');
+  if(tabla==='animales')await cargarAnimales();
+  if(tabla==='lotes'){await cargarLotes();renderLotesEnMapa();}
+  if(tabla==='cultivos')await cargarCultivos();
+  if(tabla==='pesajes')await cargarPesajes();
+  if(tabla==='sanidad')await cargarSanidad();
+  if(tabla==='grupos_lotes')await cargarGrupos();
+}
+
+async function enviarSolicitudBorrado(){
+  const motivo=document.getElementById('sol-motivo').value.trim();
+  if(!motivo){toast('Ingresá el motivo','e');return;}
+  const {error}=await sb.from('solicitudes_borrado').insert({solicitante_id:sesion.user.id,tabla:document.getElementById('sol-tabla').value,registro_id:document.getElementById('sol-id').value,motivo});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-solicitar-borrado');document.getElementById('sol-motivo').value='';
+  toast('Solicitud enviada al administrador');
+}
+
+// ============================================================
+// RENDER TABLAS
+// ============================================================
+function getLoteNombre(id){return id?(lotesList.find(l=>l.id===id)||{}).nombre||'—':'—';}
+function estadoBadge(e){return{Normal:'badge-green',Gestante:'badge-blue',Servicio:'badge-purple',Descarte:'badge-red',Seca:'badge-amber'}[e]||'badge-amber';}
+let filtroActivo='todos',busqActiva='';
+
 document.getElementById('filtros-cat').addEventListener('click',e=>{
-  if(!e.target.classList.contains('chip')) return;
+  if(!e.target.classList.contains('chip'))return;
   document.querySelectorAll('#filtros-cat .chip').forEach(c=>c.classList.remove('active'));
   e.target.classList.add('active');
   filtroActivo=e.target.dataset.cat;
   renderTablaGanado(filtroActivo,busqActiva);
 });
-function buscarGanado(q){ busqActiva=q.toLowerCase(); renderTablaGanado(filtroActivo,busqActiva); }
-
-function estadoBadge(e){ return {Normal:'badge-green',Gestante:'badge-blue',Servicio:'badge-purple',Descarte:'badge-red'}[e]||'badge-amber'; }
+function buscarGanado(q){busqActiva=q.toLowerCase();renderTablaGanado(filtroActivo,busqActiva);}
 
 function renderTablaGanado(cat,q){
-  let lista=db.animales;
-  if(cat&&cat!=='todos') lista=lista.filter(a=>a.categoria===cat);
-  if(q) lista=lista.filter(a=>(a.caravana+a.raza+a.lote+a.estado).toLowerCase().includes(q));
+  let lista=animalesList;
+  if(cat&&cat!=='todos')lista=lista.filter(a=>a.categoria===cat);
+  if(q)lista=lista.filter(a=>(a.caravana+(a.raza||'')+(a.estado||'')).toLowerCase().includes(q));
   const tbody=document.getElementById('tbody-ganado');
-  if(!lista.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:30px">Sin animales.</td></tr>';return;}
-  tbody.innerHTML=lista.map(a=>`<tr style="cursor:pointer" onclick="verFicha('${a.id}')">
-    <td><strong>#${a.caravana}</strong>${a.caravanaE?'<br><span style="font-size:10px;color:var(--txt3)">'+a.caravanaE+'</span>':''}</td>
-    <td>${a.categoria}</td><td>${a.raza}</td><td>${a.sexo}</td>
-    <td>${a.peso?a.peso+' kg':'—'}</td>
-    <td>${a.lote||'<span style="color:var(--txt3)">—</span>'}</td>
-    <td><span class="badge ${estadoBadge(a.estado)}">${a.estado}</span></td>
-    <td style="font-size:12px">${a.nacimiento||'—'}</td>
-    <td><button class="btn btn-danger btn-sm" onclick="event.stopPropagation();borrar('animales','${a.id}')">✕</button></td>
-  </tr>`).join('');
-}
-
-function mostrarLista(){ document.getElementById('vista-lista').style.display='block'; document.getElementById('vista-ficha').style.display='none'; }
-function volverLista(){ mostrarLista(); }
-
-function verFicha(id){
-  const a=db.animales.find(x=>x.id===id); if(!a) return;
-  const pesos=db.pesajes.filter(p=>p.caravana===a.caravana).sort((x,y)=>new Date(y.fecha)-new Date(x.fecha));
-  const san=db.sanidad.filter(s=>s.caravana===a.caravana).sort((x,y)=>new Date(y.fecha)-new Date(x.fecha));
-  document.getElementById('vista-lista').style.display='none';
-  document.getElementById('vista-ficha').style.display='block';
-  document.getElementById('cont-ficha').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div><h2 style="font-size:20px">Animal #${a.caravana}</h2><p style="font-size:12px;color:var(--txt3)">${a.raza} · ${a.sexo} · ${a.categoria}</p></div>
-      <span class="badge ${estadoBadge(a.estado)}" style="font-size:13px;padding:6px 14px">${a.estado}</span>
-    </div>
-    <div class="card">
-      <div class="sec-title" style="font-size:14px">Datos</div>
-      ${fr('Caravana','#'+a.caravana)}${fr('Caravana elect.',a.caravanaE||'—')}${fr('Raza',a.raza)}${fr('Sexo',a.sexo)}${fr('Peso',a.peso?a.peso+' kg':'—')}${fr('Nacimiento',a.nacimiento||'—')}${fr('Lote',a.lote||'—')}${fr('Estado',a.estado)}${fr('Madre',a.madre||'—')}${fr('Padre',a.padre||'—')}${fr('Procedencia',a.procedencia||'—')}${fr('Notas',a.notas||'—')}
-    </div>
-    <div class="card">
-      <div class="sec-title" style="font-size:14px">Pesajes (${pesos.length})</div>
-      ${pesos.length?'<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Peso kg</th><th>Ganancia</th><th>Método</th></tr></thead><tbody>'+pesos.map(p=>`<tr><td>${p.fecha}</td><td><strong>${p.peso} kg</strong></td><td>${p.ganancia||'—'}</td><td>${p.metodo}</td></tr>`).join('')+'</tbody></table></div>':'<p style="color:var(--txt3);font-size:13px">Sin pesajes.</p>'}
-    </div>
-    <div class="card">
-      <div class="sec-title" style="font-size:14px">Sanidad (${san.length})</div>
-      ${san.length?'<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Próximo</th></tr></thead><tbody>'+san.map(s=>`<tr><td>${s.fecha}</td><td>${s.tipo}</td><td>${s.producto||'—'}</td><td>${s.proximo||'—'}</td></tr>`).join('')+'</tbody></table></div>':'<p style="color:var(--txt3);font-size:13px">Sin eventos.</p>'}
-    </div>
-  `;
-}
-function fr(k,v){ return `<div class="ficha-row"><span class="ficha-key">${k}</span><span class="ficha-val">${v}</span></div>`; }
-
-function renderLotes(){
-  const el=document.getElementById('lista-lotes'); if(!el) return;
-  if(!db.lotes.length){el.innerHTML='<div class="empty"><div class="empty-icon">◻</div><p>Sin lotes. Dibujá uno en el mapa o creá uno manualmente.</p></div>';renderLotesEnMapa();return;}
-  el.innerHTML=db.lotes.map(l=>`<div class="lote-row">
-    <div class="lote-color" style="background:${l.color}"></div>
-    <div style="flex:1;min-width:0"><div style="font-weight:500;font-size:13px">${l.nombre}</div>
-    <div style="font-size:11px;color:var(--txt3)">${l.tipo} · ${l.suelo}${l.geojson?' · <span style="color:var(--verde)">✓ En mapa</span>':' · Sin polígono'}${l.notas?' · '+l.notas:''}</div></div>
-    <div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:var(--verde);white-space:nowrap">${(l.ha||0).toLocaleString()} ha</div>
-    <button class="btn btn-danger btn-sm" style="margin-left:8px" onclick="borrar('lotes','${l.id}')">✕</button>
-  </div>`).join('');
-  renderLotesEnMapa();
-}
-
-function renderCultivos(){
-  const tbody=document.getElementById('tbody-cultivos');
-  if(!db.cultivos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:28px">Sin cultivos.</td></tr>';return;}
-  tbody.innerHTML=db.cultivos.map(c=>`<tr><td><strong>${c.cultivo}</strong></td><td>${c.lote||'—'}</td><td>${c.variedad||'—'}</td><td>${c.siembra||'—'}</td><td>${c.ha||'—'} ha</td><td><span class="badge badge-green">${c.estado||'Activo'}</span></td><td>${c.campaña||'—'}</td><td><button class="btn btn-danger btn-sm" onclick="borrar('cultivos','${c.id}')">✕</button></td></tr>`).join('');
-}
-
-function renderPesajes(){
-  const tbody=document.getElementById('tbody-pesajes');
-  const lista=[...db.pesajes].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  if(!lista.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--txt3);padding:28px">Sin pesajes.</td></tr>';return;}
-  tbody.innerHTML=lista.map(p=>`<tr><td>${p.fecha||'—'}</td><td>#${p.caravana}</td><td>${p.lote||'—'}</td><td><strong>${p.peso} kg</strong></td><td>${p.ganancia||'—'}</td><td><span class="badge ${p.metodo==='Dron / GanaderIA'?'badge-blue':p.metodo==='Balanza'?'badge-green':'badge-gray'}">${p.metodo}</span></td><td style="font-size:11px;color:var(--txt3)">${p.notas||'—'}</td></tr>`).join('');
-}
-
-function renderSanidad(){
-  const tbody=document.getElementById('tbody-sanidad');
-  const hoy=new Date();
-  const lista=[...db.sanidad].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  if(!lista.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:28px">Sin eventos.</td></tr>';return;}
-  tbody.innerHTML=lista.map(s=>{
-    let est='';
-    if(s.proximo){const d=Math.round((new Date(s.proximo)-hoy)/86400000);est=d<0?'<span class="badge badge-red">Vencido</span>':d<=30?'<span class="badge badge-amber">'+d+' días</span>':'<span class="badge badge-green">OK</span>';}
-    return`<tr><td>${s.fecha||'—'}</td><td><span class="badge badge-blue">${s.tipo}</span></td><td>${s.caravana?'#'+s.caravana:s.lote||'General'}</td><td>${s.producto||'—'}</td><td>${s.dosis||'—'}</td><td>${s.proximo||'—'}</td><td>${est}</td><td><button class="btn btn-danger btn-sm" onclick="borrar('sanidad','${s.id}')">✕</button></td></tr>`;
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:28px">Sin animales.</td></tr>';return;}
+  const canDel=perfil?.rol!=='empleado';
+  tbody.innerHTML=lista.map(a=>{
+    const loteNombre=getLoteNombre(a.lote_id);
+    const pendiente=(!a.validado&&perfil?.rol==='admin')?'<span class="pendiente-chip">Pendiente validación</span>':'';
+    return`<tr style="cursor:pointer" onclick="verFichaAnimal('${a.id}')">
+      <td><strong>#${a.caravana}</strong>${a.caravana_electronica?'<br><span style="font-size:10px;color:var(--txt3)">'+a.caravana_electronica+'</span>':''}</td>
+      <td>${a.categoria||'—'}</td><td>${a.raza||'—'}</td><td>${a.sexo||'—'}</td>
+      <td>${a.peso?a.peso+' kg':'—'}</td><td>${loteNombre}</td>
+      <td><span class="badge ${estadoBadge(a.estado)}">${a.estado}</span></td>
+      <td style="font-size:11px;color:var(--txt3)">${a.perfiles?.nombre||'—'}${pendiente}</td>
+      <td>${canDel?`<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();borrar('animales','${a.id}')">✕</button>`:''}</td>
+    </tr>`;
   }).join('');
 }
 
-function renderAlertas(){
-  const hoy=new Date(); const alertas=[];
-  db.sanidad.forEach(s=>{
-    if(!s.proximo) return;
-    const dias=Math.round((new Date(s.proximo)-hoy)/86400000);
-    if(dias<0) alertas.push({c:'var(--rojo)',txt:`${s.tipo} VENCIDO — ${s.caravana?'Anim. #'+s.caravana:s.lote||'General'}`,sub:`${s.producto||''} · Venció hace ${Math.abs(dias)} días`});
-    else if(dias<=30) alertas.push({c:'var(--naranja)',txt:`Próximo ${s.tipo} — ${s.caravana?'Anim. #'+s.caravana:s.lote||'General'}`,sub:`${s.producto||''} · En ${dias} días (${s.proximo})`});
+function mostrarLista(){document.getElementById('vista-lista').style.display='block';const fi=document.getElementById('vista-ficha');if(fi)fi.style.display='none';}
+function volverListaGanado(){mostrarLista();}
+
+async function verFichaAnimal(id){
+  const a=animalesList.find(x=>x.id===id);if(!a)return;
+  const [{data:pesos},{data:san}]=await Promise.all([
+    sb.from('pesajes').select('*').eq('establecimiento_id',estId).eq('caravana',a.caravana).order('fecha',{ascending:false}),
+    sb.from('sanidad').select('*').eq('establecimiento_id',estId).eq('caravana',a.caravana).order('fecha',{ascending:false})
+  ]);
+  document.getElementById('vista-lista').style.display='none';
+  const fi=document.getElementById('vista-ficha');if(fi){fi.style.display='block';fi.innerHTML=buildFicha(a,pesos||[],san||[]);}
+}
+function fr(k,v){return`<div class="ficha-row"><span class="ficha-key">${k}</span><span class="ficha-val">${v}</span></div>`;}
+function buildFicha(a,pesos,san){
+  const loteNombre=getLoteNombre(a.lote_id);
+  return`<div class="back-btn" onclick="volverListaGanado()">← Volver al rodeo</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div><h2 style="font-size:19px">Animal #${a.caravana}</h2><p style="font-size:12px;color:var(--txt3)">${a.raza||''} · ${a.sexo||''} · ${a.categoria||''}</p></div>
+    <span class="badge ${estadoBadge(a.estado)}" style="font-size:13px;padding:5px 12px">${a.estado}</span>
+  </div>
+  <div class="card">${fr('Raza',a.raza||'—')}${fr('Sexo',a.sexo||'—')}${fr('Peso',a.peso?a.peso+' kg':'—')}${fr('Nacimiento',a.nacimiento||'—')}${fr('Lote',loteNombre)}${fr('Madre',a.madre||'—')}${fr('Padre',a.padre||'—')}${fr('Procedencia',a.procedencia||'—')}${fr('Notas',a.notas||'—')}</div>
+  <div class="card"><div class="sec-title" style="font-size:13px">Pesajes (${pesos.length})</div>
+    ${pesos.length?'<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Peso kg</th><th>Ganancia</th><th>Método</th></tr></thead><tbody>'+pesos.map(p=>`<tr><td>${p.fecha}</td><td><strong>${p.peso} kg</strong></td><td>${p.ganancia||'—'}</td><td>${p.metodo}</td></tr>`).join('')+'</tbody></table></div>':'<p style="color:var(--txt3);font-size:13px">Sin pesajes.</p>'}
+  </div>
+  <div class="card"><div class="sec-title" style="font-size:13px">Sanidad (${san.length})</div>
+    ${san.length?'<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Próximo</th></tr></thead><tbody>'+san.map(s=>`<tr><td>${s.fecha}</td><td>${s.tipo}</td><td>${s.producto||'—'}</td><td>${s.proximo||'—'}</td></tr>`).join('')+'</tbody></table></div>':'<p style="color:var(--txt3);font-size:13px">Sin eventos.</p>'}
+  </div>`;
+}
+
+function renderLotes(){
+  const el=document.getElementById('lista-lotes');if(!el)return;
+  const totalHa=lotesList.reduce((s,l)=>s+(parseFloat(l.ha)||0),0);
+  document.getElementById('lotes-count').textContent=lotesList.length+' lotes · '+totalHa.toLocaleString()+' ha';
+  if(!lotesList.length){el.innerHTML='<div class="empty"><div class="empty-icon">◻</div><p>Sin lotes. Dibujá uno en el mapa o creá uno manualmente.</p></div>';return;}
+  const sinGrupo=lotesList.filter(l=>!l.grupo_id);
+  const porGrupo={};
+  lotesList.filter(l=>l.grupo_id).forEach(l=>{if(!porGrupo[l.grupo_id])porGrupo[l.grupo_id]=[];porGrupo[l.grupo_id].push(l);});
+  let html='';
+  gruposList.forEach(g=>{
+    const lotes=porGrupo[g.id]||[];if(!lotes.length)return;
+    html+=`<div class="lote-grupo-header"><span>📁 ${g.nombre}</span><span style="font-size:11px;color:var(--txt3)">${lotes.length} lotes · ${lotes.reduce((s,l)=>s+(parseFloat(l.ha)||0),0).toLocaleString()} ha</span></div>`;
+    html+=lotes.map(l=>renderLoteRow(l)).join('');
   });
-  const cont=document.getElementById('alertas-cont');
-  if(!alertas.length){cont.innerHTML='<div class="empty"><div class="empty-icon">✓</div><p>Sin alertas.</p></div>';return;}
+  if(sinGrupo.length){
+    if(gruposList.length) html+=`<div class="lote-grupo-header"><span>📋 Sin grupo</span><span style="font-size:11px;color:var(--txt3)">${sinGrupo.length} lotes</span></div>`;
+    html+=sinGrupo.map(l=>renderLoteRow(l)).join('');
+  }
+  el.innerHTML=html;
+}
+function renderLoteRow(l){
+  const canDel=perfil?.rol!=='empleado';
+  return`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:white;border:1px solid var(--gris2);border-radius:8px;margin-bottom:6px">
+    <div style="width:4px;height:34px;border-radius:2px;flex-shrink:0;background:${l.color||'#52b788'}"></div>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:500;font-size:13px">${l.nombre}</div>
+      <div style="font-size:11px;color:var(--txt3)">${l.tipo}${l.arrendado?' · <span style="color:var(--naranja)">Arrendado</span>':' · Propio'}${l.geojson?' · <span style="color:var(--verde)">✓ En mapa</span>':''}</div>
+    </div>
+    <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--verde);white-space:nowrap">${(parseFloat(l.ha)||0).toLocaleString()} ha</div>
+    ${canDel?`<button class="btn btn-danger btn-sm" onclick="borrar('lotes','${l.id}')">✕</button>`:''}
+  </div>`;
+}
+
+function renderCultivos(lista){
+  if(lista.length!==undefined) document.getElementById('s-cultivos').textContent=lista.length;
+  const tbody=document.getElementById('tbody-cultivos');
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:28px">Sin cultivos.</td></tr>';return;}
+  tbody.innerHTML=lista.map(c=>{
+    const canDel=perfil?.rol!=='empleado';
+    return`<tr><td><strong>${c.cultivo}</strong></td><td>${getLoteNombre(c.lote_id)}</td><td>${c.variedad||'—'}</td><td>${c.siembra||'—'}</td><td>${c.ha||'—'} ha</td><td><span class="badge badge-green">${c.estado||'Activo'}</span></td><td>${c.campana||'—'}</td><td style="font-size:11px;color:var(--txt3)">${c.perfiles?.nombre||'—'}</td><td>${canDel?`<button class="btn btn-danger btn-sm" onclick="borrar('cultivos','${c.id}')">✕</button>`:''}</td></tr>`;
+  }).join('');
+}
+
+function renderPesajes(lista){
+  const tbody=document.getElementById('tbody-pesajes');
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:28px">Sin pesajes.</td></tr>';return;}
+  tbody.innerHTML=lista.map(p=>{
+    const canDel=perfil?.rol!=='empleado';
+    const est=p.validado?'<span class="badge badge-green">OK</span>':'<span class="badge badge-amber">Pendiente</span>';
+    return`<tr><td>${p.fecha}</td><td>#${p.caravana}</td><td>${getLoteNombre(p.lote_id)}</td><td><strong>${p.peso} kg</strong></td><td>${p.ganancia||'—'}</td><td>${p.metodo}</td><td style="font-size:11px;color:var(--txt3)">${p.perfiles?.nombre||'—'}</td><td>${est}</td><td>${canDel?`<button class="btn btn-danger btn-sm" onclick="borrar('pesajes','${p.id}')">✕</button>`:''}</td></tr>`;
+  }).join('');
+}
+
+function renderSanidad(lista){
+  const tbody=document.getElementById('tbody-sanidad');
+  if(!lista.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:28px">Sin eventos.</td></tr>';return;}
+  const hoy=new Date();
+  tbody.innerHTML=lista.map(s=>{
+    let est='';
+    if(s.proximo){const d=Math.round((new Date(s.proximo)-hoy)/86400000);est=d<0?'<span class="badge badge-red">Vencido</span>':d<=30?'<span class="badge badge-amber">'+d+' días</span>':'<span class="badge badge-green">OK</span>';}
+    const canDel=perfil?.rol!=='empleado';
+    return`<tr><td>${s.fecha}</td><td><span class="badge badge-blue">${s.tipo}</span></td><td>${s.caravana?'#'+s.caravana:getLoteNombre(s.lote_id)}</td><td>${s.producto||'—'}</td><td>${s.dosis||'—'}</td><td>${s.proximo||'—'}</td><td>${est}</td><td style="font-size:11px;color:var(--txt3)">${s.perfiles?.nombre||'—'}</td><td>${canDel?`<button class="btn btn-danger btn-sm" onclick="borrar('sanidad','${s.id}')">✕</button>`:''}</td></tr>`;
+  }).join('');
+}
+
+function renderAlertas(lista){
+  const cont=document.getElementById('alertas-cont');if(!cont)return;
+  if(!lista){cont.innerHTML='<div style="padding:20px;text-align:center;color:var(--txt3)"><span class="spinner"></span>Cargando...</div>';return;}
+  const hoy=new Date();const alertas=[];
+  (lista||[]).forEach(s=>{
+    if(!s.proximo)return;
+    const dias=Math.round((new Date(s.proximo)-hoy)/86400000);
+    if(dias<0)alertas.push({c:'var(--rojo)',txt:`${s.tipo} VENCIDO — ${s.caravana?'#'+s.caravana:getLoteNombre(s.lote_id)||'General'}`,sub:`${s.producto||''} · Venció hace ${Math.abs(dias)} días`});
+    else if(dias<=30)alertas.push({c:'var(--naranja)',txt:`Próximo: ${s.tipo} — ${s.caravana?'#'+s.caravana:getLoteNombre(s.lote_id)||'General'}`,sub:`${s.producto||''} · En ${dias} días (${s.proximo})`});
+  });
+  if(!alertas.length){cont.innerHTML='<div class="empty"><div class="empty-icon">✓</div><p>Sin alertas. Todo en orden.</p></div>';return;}
   cont.innerHTML=alertas.map(a=>`<div class="alert-row"><div class="alert-dot" style="background:${a.c}"></div><div><div style="font-size:13px;font-weight:500">${a.txt}</div><div style="font-size:11px;color:var(--txt3)">${a.sub}</div></div></div>`).join('');
 }
 
-// =============================================================
+// ============================================================
+// ADMIN
+// ============================================================
+async function cargarAdmin(){
+  if(!estId||perfil?.rol!=='admin')return;
+  const [{data:accesos},{data:solic}]=await Promise.all([
+    sb.from('establecimiento_accesos').select('*,perfiles(nombre,email)').eq('establecimiento_id',estId),
+    sb.from('solicitudes_borrado').select('*,perfiles(nombre)').eq('estado','pendiente')
+  ]);
+  const lu=document.getElementById('lista-usuarios');
+  if(!accesos||!accesos.length){lu.innerHTML='<p style="color:var(--txt3);font-size:13px;padding:10px">Sin usuarios adicionales.</p>';}
+  else lu.innerHTML='<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>'+accesos.map(a=>`<tr><td>${a.perfiles?.nombre||'—'}</td><td style="font-size:11px;color:var(--txt3)">${a.perfiles?.email||'—'}</td><td><span class="badge ${a.rol==='admin'?'badge-amber':a.rol==='socio'?'badge-blue':'badge-green'}">${a.rol}</span></td><td>${a.activo?'<span class="badge badge-green">Activo</span>':'<span class="badge badge-red">Inactivo</span>'}</td><td><button class="btn btn-danger btn-sm" onclick="revocarAcceso('${a.id}')">Revocar</button></td></tr>`).join('')+'</tbody></table></div>';
+  const ls=document.getElementById('lista-solicitudes');
+  if(!solic||!solic.length){ls.innerHTML='<div class="empty"><p style="font-size:13px">Sin solicitudes pendientes.</p></div>';}
+  else ls.innerHTML=solic.map(s=>`<div style="background:var(--gris);border-radius:8px;padding:10px;margin-bottom:8px"><div style="font-weight:500;font-size:13px">Solicitud de ${s.perfiles?.nombre||'?'}</div><div style="font-size:12px;color:var(--txt3);margin:4px 0">Tabla: ${s.tabla} · ID: ${s.registro_id.slice(0,8)}...</div><div style="font-size:12px;color:var(--txt2)">Motivo: ${s.motivo}</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm" onclick="resolverSolicitud('${s.id}',true,'${s.tabla}','${s.registro_id}')">✓ Aprobar y borrar</button><button class="btn btn-danger btn-sm" onclick="resolverSolicitud('${s.id}',false,'','')">✕ Rechazar</button></div></div>`).join('');
+}
+
+async function resolverSolicitud(id,aprobar,tabla,regId){
+  if(aprobar&&tabla&&regId)await sb.from(tabla).delete().eq('id',regId);
+  await sb.from('solicitudes_borrado').update({estado:aprobar?'aprobada':'rechazada',resuelto_por:sesion.user.id}).eq('id',id);
+  toast(aprobar?'Registro eliminado':'Solicitud rechazada');cargarAdmin();
+}
+async function revocarAcceso(id){
+  if(!confirm('¿Revocar acceso?'))return;
+  await sb.from('establecimiento_accesos').update({activo:false}).eq('id',id);
+  cargarAdmin();toast('Acceso revocado');
+}
+async function invitarUsuario(){
+  const email=document.getElementById('inv-email').value.trim();
+  const rol=document.getElementById('inv-rol').value;
+  if(!email){toast('Email obligatorio','e');return;}
+  const {data:p}=await sb.from('perfiles').select('id').eq('email',email).single();
+  if(!p){toast('Usuario no encontrado. Debe registrarse primero en la app.','e');return;}
+  const {error}=await sb.from('establecimiento_accesos').upsert({establecimiento_id:estId,usuario_id:p.id,rol,activo:true,invitado_por:sesion.user.id},{onConflict:'establecimiento_id,usuario_id'});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-invitar');document.getElementById('inv-email').value='';
+  cargarAdmin();toast('Acceso otorgado a '+email);
+}
+
+// ============================================================
+// IMPORTAR / EXPORTAR (Supabase)
+// ============================================================
+function parseCSV(txt){
+  const lines=txt.trim().split('\n').filter(l=>l.trim());
+  if(lines.length<2)return[];
+  const headers=lines[0].split(/[,;]/).map(h=>h.trim().replace(/["\r]/g,'').toLowerCase());
+  return lines.slice(1).map(line=>{const cols=line.split(/[,;]/).map(c=>c.trim().replace(/["\r]/g,''));const row={};headers.forEach((h,i)=>row[h]=cols[i]||'');return row;});
+}
+async function importGanado(input){
+  if(!estId||!sesion){toast('Iniciá sesión primero','e');return;}
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const rows=parseCSV(e.target.result);
+    const batch=rows.filter(r=>r.caravana).map(r=>({establecimiento_id:estId,caravana:r.caravana,caravana_electronica:r.caravana_electronica||null,categoria:r.categoria||'Sin categoría',sexo:r.sexo||null,raza:r.raza||null,peso:parseFloat(r.peso_kg)||0,nacimiento:r.fecha_nacimiento||null,estado:r.estado||'Normal',notas:r.notas||null,cargado_por:sesion.user.id,validado:perfil?.rol==='admin'}));
+    if(!batch.length){toast('Sin datos válidos en el CSV','e');return;}
+    const {error}=await sb.from('animales').insert(batch);
+    if(error){toast('Error: '+error.message,'e');return;}
+    await cargarAnimales();renderStats();
+    const el=document.getElementById('r-animales');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${batch.length} animales importados.</span>`;
+    toast(batch.length+' animales importados');
+  };reader.readAsText(file,'UTF-8');
+}
+async function importPesajes(input){
+  if(!estId||!sesion)return;
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const rows=parseCSV(e.target.result);
+    const batch=rows.map(r=>({establecimiento_id:estId,caravana:r.animal_id||r.caravana||'?',fecha:r.fecha||new Date().toISOString().slice(0,10),peso:parseFloat(r.peso_estimado||r.peso_kg||r.peso)||0,metodo:'Dron / GanaderIA',notas:r.confianza?'Confianza: '+r.confianza:null,cargado_por:sesion.user.id,validado:false}));
+    const {error}=await sb.from('pesajes').insert(batch);
+    if(error){toast('Error: '+error.message,'e');return;}
+    await cargarPesajes();
+    const el=document.getElementById('r-pesajes');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${batch.length} pesajes importados.</span>`;
+    toast(batch.length+' pesajes importados');
+  };reader.readAsText(file,'UTF-8');
+}
+async function importGeoJSON(input){
+  if(!estId||!sesion)return;
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      const gj=JSON.parse(e.target.result);
+      const feats=gj.features||[gj];
+      const batch=feats.map((f,i)=>{const p=f.properties||{};return{establecimiento_id:estId,nombre:p.nombre||p.name||p.NOMBRE||('Lote '+(i+1)),ha:parseFloat(p.hectareas||p.ha||p.area_ha||0),tipo:'Agrícola',suelo:'Franco',color:'#52b788',notas:'Importado desde QGIS',geojson:f};});
+      const {error}=await sb.from('lotes').insert(batch);
+      if(error){toast('Error: '+error.message,'e');return;}
+      await cargarLotes();renderStats();
+      const el=document.getElementById('r-geojson');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${batch.length} lotes importados.</span>`;
+      toast(batch.length+' lotes importados desde QGIS');
+    }catch(ex){toast('Error al leer GeoJSON','e');}
+  };reader.readAsText(file,'UTF-8');
+}
+async function exportarCSV(tipo){
+  if(!estId)return;
+  const cfg={animales:{cols:'caravana,caravana_electronica,categoria,raza,sexo,peso,nacimiento,estado,madre,padre,notas'},pesajes:{cols:'fecha,caravana,peso,metodo,ganancia,notas'},cultivos:{cols:'cultivo,variedad,siembra,ha,estado,campana,notas'},sanidad:{cols:'fecha,tipo,caravana,producto,dosis,proximo,notas'}};
+  const c=cfg[tipo];
+  const {data}=await sb.from(tipo).select(c.cols).eq('establecimiento_id',estId);
+  if(!data||!data.length){toast('Sin datos para exportar','e');return;}
+  const headers=c.cols.split(',');
+  const csv=[headers.join(','),...data.map(r=>headers.map(h=>{const v=(r[h]||'').toString();return v.includes(',')?'"'+v+'"':v;}).join(','))].join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=tipo+'_campioapp.csv';a.click();
+  toast('CSV descargado');
+}
+function dlPlantilla(tipo){
+  const p={animales:'caravana,caravana_electronica,categoria,raza,sexo,peso_kg,fecha_nacimiento,lote,estado,madre,padre,notas\n0001,,Vaca,Aberdeen Angus,Hembra,380,2021-03-15,Lote Sur,Normal,,,',pesajes:'animal_id,peso_estimado,confianza,fecha,lote\n0001,387,0.95,2026-05-20,Lote Sur'};
+  const blob=new Blob([p[tipo]],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='plantilla_'+tipo+'.csv';a.click();
+}
+
+// ============================================================
 // MAPA LEAFLET
-// =============================================================
-let mapa=null, drawnItems=null, capaBaseActual=null, capaCop=null, cascoMark=null, lotePoligTemp=null, capasLotes={}, copActivo=null;
+// ============================================================
+let mapa=null,drawnItems=null,capaBaseActual=null,capaSat=null,capaClima=null,cascoMark=null,lotePoligTemp=null,capasLotesMap={},satActivo=null,climaActivo=null;
 
-const BASES = {
-  osm:  ()=>L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),
-  sat:  ()=>L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}),
-  goog: ()=>L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',{attribution:'© Google',maxZoom:20})
+const BASES={
+  osm:()=>L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),
+  sat:()=>L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}),
+  goog:()=>L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',{attribution:'© Google',maxZoom:20})
 };
 
-// Copernicus Data Space — nombres de capas estándar (configurables en Dashboard)
-// Ref: https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/OGC/WMS.html
-// REEMPLAZADO POR NASA GIBS — ver sección CAPAS NASA GIBS abajo
-const LEYENDAS = {
-  ndvi:  {cols:['#d73027','#f46d43','#fee08b','#d9ef8b','#1a9850'],lbl:['-1','0','0.5','0.8','1'],desc:'Sobre 0.6 = cultivo en desarrollo activo. Rojo = suelo desnudo o estrés.'},
-  ndwi:  {cols:['#d7191c','#fdae61','#ffffbf','#abd9e9','#2c7bb6'],lbl:['-1','-0.5','0','0.5','1'],desc:'Positivo = agua o humedad alta. Negativo = suelo seco.'},
-  rgb:   {cols:['#2b6cb0','#276749','#c6f6d5','#f6e05e','#718096'],lbl:['Agua','Veg.','Campo','Suelo','Otro'],desc:'Color natural Sentinel-2, resolución ~10 m/pixel.'},
-  falso: {cols:['#c6f6d5','#276749','#e53e3e','#f6e05e','#2b6cb0'],lbl:['Baja veg.','Alta veg.','Urbano','Suelo','Agua'],desc:'Rojo intenso = vegetación activa sana.'}
+const GIBS={
+  ndvi:{url:f=>`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_NDVI_8Day/default/${f}/GoogleMapsCompatible/{z}/{y}/{x}.png`,label:'NDVI — Vigor vegetativo (MODIS 250m)',maxZ:9,cols:['#d73027','#f46d43','#fee08b','#d9ef8b','#66bd63','#1a9850'],lbl:['Estrés','','Medio','','Sano','Óptimo'],desc:'Valores altos (verde) = vegetación activa y sana. Valores bajos (rojo) = suelo desnudo o estrés hídrico.'},
+  rgb:{url:f=>`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${f}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,label:'RGB color real (MODIS/Terra)',maxZ:9,cols:['#2b6cb0','#276749','#c6f6d5','#f6e05e'],lbl:['Agua','Bosque','Campo','Suelo'],desc:'Color natural satelital. Resolución ~250m/pixel.'},
+  falso:{url:f=>`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_Bands721/default/${f}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,label:'Falso color infrarrojo (bandas 7-2-1)',maxZ:9,cols:['#c6f6d5','#276749','#e53e3e','#2b6cb0'],lbl:['Baja veg.','Alta veg.','Urbano','Agua'],desc:'Rojo brillante = vegetación activa y sana. Útil para detectar estrés y variabilidad de lotes.'},
+  agri:{url:f=>`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_Aerosol/default/${f}/GoogleMapsCompatible/{z}/{y}/{x}.png`,label:'Índice agrícola (MODIS)',maxZ:9,cols:['#1a9850','#66bd63','#d9ef8b','#fee08b','#d73027'],lbl:['Alto','','Medio','','Bajo'],desc:'Índice de actividad agrícola relativa. Útil para comparar entre lotes.'},
+  humedad:{url:f=>`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_Land_Surface_Temp_Night/default/${f}/GoogleMapsCompatible/{z}/{y}/{x}.png`,label:'Temperatura superficial nocturna',maxZ:9,cols:['#2b6cb0','#abd9e9','#ffffbf','#fdae61','#d7191c'],lbl:['Frío','','Templado','','Caliente'],desc:'Temperatura superficial nocturna. Zonas frías = mayor humedad y masa vegetativa.'},
 };
 
-function getCfgCampo(){ try{return JSON.parse(localStorage.getItem('campioapp_campo'))||{lat:-31.74154,lng:-58.8444,zoom:14,nombre:''};}catch(e){return{lat:-31.74154,lng:-58.8444,zoom:14,nombre:''};} }
-function saveCfgCampo(c){ localStorage.setItem('campioapp_campo',JSON.stringify(c)); }
+const CLIMA_LAYERS={
+  lluvia:{url:'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=d76d3028a16ef44a7fb5b8b2e9f79e3e',label:'Precipitación'},
+  temp:{url:'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=d76d3028a16ef44a7fb5b8b2e9f79e3e',label:'Temperatura'},
+  viento:{url:'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=d76d3028a16ef44a7fb5b8b2e9f79e3e',label:'Viento'},
+};
+
+function getCfgCampo(){try{return JSON.parse(localStorage.getItem('campioapp_campo'))||{lat:-31.74154,lng:-58.8444,zoom:14,nombre:''};}catch(e){return{lat:-31.74154,lng:-58.8444,zoom:14,nombre:''};}}
+function saveCfgCampo(c){localStorage.setItem('campioapp_campo',JSON.stringify(c));}
 
 function iniciarMapa(){
   if(mapa){mapa.invalidateSize();return;}
   const cfg=getCfgCampo();
   mapa=L.map('mapa-lotes',{zoomControl:true}).setView([cfg.lat,cfg.lng],cfg.zoom);
-  capaBaseActual=BASES.osm();
-  capaBaseActual.addTo(mapa);
-  drawnItems=new L.FeatureGroup();
-  mapa.addLayer(drawnItems);
-  const dc=new L.Control.Draw({draw:{polygon:{shapeOptions:{color:'#1a5c38',fillOpacity:0.3},showArea:true,allowIntersection:false},rectangle:{shapeOptions:{color:'#1a5c38',fillOpacity:0.3}},polyline:false,circle:false,circlemarker:false,marker:false},edit:{featureGroup:drawnItems}});
+  capaBaseActual=BASES.osm();capaBaseActual.addTo(mapa);
+  drawnItems=new L.FeatureGroup();mapa.addLayer(drawnItems);
+  const dc=new L.Control.Draw({draw:{polygon:{shapeOptions:{color:'#1a5c38',fillOpacity:0.28},showArea:true,allowIntersection:false},rectangle:{shapeOptions:{color:'#1a5c38',fillOpacity:0.28}},polyline:false,circle:false,circlemarker:false,marker:false},edit:{featureGroup:drawnItems}});
   mapa.addControl(dc);
-  if(cfg.nombre) ponerCascoMarker(cfg);
-  mapa.on(L.Draw.Event.CREATED,function(e){
-    drawnItems.addLayer(e.layer); lotePoligTemp=e.layer;
-    let ha=0; try{ha=calcHa(e.layer.getLatLngs()[0]);}catch(ex){}
+  if(cfg.nombre)ponerCascoMarker(cfg);
+  mapa.on(L.Draw.Event.CREATED,e=>{
+    drawnItems.addLayer(e.layer);lotePoligTemp=e.layer;
+    let ha=0;try{ha=calcHa(e.layer.getLatLngs()[0]);}catch(ex){}
     document.getElementById('lm-ha').value=ha.toFixed(2);
     document.getElementById('lm-nombre').value='';
-    document.getElementById('lm-notas').value='';
     openModal('modal-lote-mapa');
   });
-  mapa.on(L.Draw.Event.EDITED,function(e){
-    e.layers.eachLayer(function(l){const id=l.options.loteId;if(id){const lt=db.lotes.find(x=>x.id===id);if(lt){lt.geojson=l.toGeoJSON();saveDB();}}});
-    toast('Polígono actualizado');
+  mapa.on(L.Draw.Event.EDITED,e=>{
+    e.layers.eachLayer(async l=>{
+      const id=l.options.loteId;
+      if(id){await sb.from('lotes').update({geojson:l.toGeoJSON()}).eq('id',id);toast('Polígono actualizado');}
+    });
   });
-  mapa.on(L.Draw.Event.DELETED,function(e){
-    e.layers.eachLayer(function(l){const id=l.options.loteId;if(id&&confirm('¿Eliminar lote "'+(db.lotes.find(x=>x.id===id)||{}).nombre+'" de la base?')){db.lotes=db.lotes.filter(x=>x.id!==id);saveDB();renderAll();}});
+  mapa.on(L.Draw.Event.DELETED,e=>{
+    e.layers.eachLayer(l=>{const id=l.options.loteId;if(id)borrar('lotes',id);});
   });
   const hoy=new Date().toISOString().slice(0,10);
-  const el=document.getElementById('fecha-cop');
-  if(el&&!el.value) el.value=hoy;
+  const el=document.getElementById('fecha-cop');if(el&&!el.value)el.value=hoy;
+  fetchClima();
+  renderLotesEnMapa();
 }
 
 function ponerCascoMarker(cfg){
-  if(cascoMark){mapa.removeLayer(cascoMark);}
-  const ico=L.divIcon({html:`<div style="background:#1a5c38;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">🏠</div>`,iconSize:[30,30],iconAnchor:[15,15],className:''});
-  cascoMark=L.marker([cfg.lat,cfg.lng],{icon:ico}).addTo(mapa).bindPopup(`<strong>${cfg.nombre||'Casco principal'}</strong><br><span style="font-size:11px;color:#666">${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}</span>`);
+  if(cascoMark)mapa.removeLayer(cascoMark);
+  const ico=L.divIcon({html:`<div style="background:#1a5c38;color:white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">🏠</div>`,iconSize:[26,26],iconAnchor:[13,13],className:''});
+  cascoMark=L.marker([cfg.lat,cfg.lng],{icon:ico}).addTo(mapa).bindPopup(`<strong>${cfg.nombre||'Casco'}</strong><br><span style="font-size:11px">${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}</span>`);
 }
 
 function setBase(tipo){
-  if(!mapa) return;
-  if(capaBaseActual) mapa.removeLayer(capaBaseActual);
-  capaBaseActual=BASES[tipo]();
-  capaBaseActual.addTo(mapa);
-  if(capaCop) capaCop.bringToFront();
-  ['osm','sat','goog'].forEach(k=>{ const b=document.getElementById('btn-'+k); if(b) b.className='layer-btn'+(k===tipo?' active-'+k:''); });
+  if(!mapa)return;
+  if(capaBaseActual)mapa.removeLayer(capaBaseActual);
+  capaBaseActual=BASES[tipo]();capaBaseActual.addTo(mapa);
+  if(capaSat)capaSat.bringToFront();
+  if(capaClima)capaClima.bringToFront();
+  ['osm','sat','goog'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn'+(k===tipo?' active-base':'');});
 }
-
-// =============================================================
-// CAPAS SATELITALES
-// NOTA TÉCNICA: Los servicios WMS externos (NASA, Copernicus, IGN)
-// requieren que la app esté en un servidor web (no file://) por CORS.
-// Solución: subir la app a Netlify (gratis) — los WMS funcionan desde ahí.
-// Mientras tanto: usamos tiles XYZ que SÍ funcionan sin servidor.
-// =============================================================
-
-// Tiles XYZ que funcionan desde file:// y desde servidor
-const CAPAS_SAT_XYZ = {
-  ndvi: {
-    // GIBS NASA via XYZ — funciona solo desde servidor web
-    url: fecha => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_NDVI_8Day/default/${fecha}/GoogleMapsCompatible/{z}/{y}/{x}.png`,
-    label: 'NDVI — MODIS/Terra (NASA GIBS)',
-    desc: '250m/pixel · Requiere servidor web (Netlify)',
-    leyenda: { cols:['#d73027','#f46d43','#fee08b','#d9ef8b','#66bd63','#1a9850'], lbl:['-0.2','0','0.2','0.4','0.6','0.8+'] },
-    info: 'Sobre 0.5 = cultivo en buen estado. Rojo = suelo desnudo o estrés severo.'
-  },
-  rgb: {
-    url: fecha => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${fecha}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,
-    label: 'RGB color real — MODIS/Terra (NASA GIBS)',
-    desc: '250m/pixel diario · Requiere servidor web',
-    leyenda: { cols:['#2b6cb0','#276749','#c6f6d5','#f6e05e','#718096'], lbl:['Agua','Veg.','Campo','Suelo','Nubes'] },
-    info: 'Imagen satelital diaria en colores naturales.'
-  },
-  falso: {
-    url: fecha => `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_Bands721/default/${fecha}/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,
-    label: 'Falso color infrarrojo — MODIS/Terra',
-    desc: '250m/pixel · Rojo = vegetación activa',
-    leyenda: { cols:['#c6f6d5','#276749','#e53e3e','#f6e05e','#2b6cb0'], lbl:['Baja veg.','Alta veg.','Urbano','Suelo seco','Agua'] },
-    info: 'Rojo/naranja brillante = vegetación sana activa.'
-  },
-  ign: {
-    url: () => 'https://wms.ign.gob.ar/geoserver/gwc/service/tms/1.0.0/capabaseargenmap@EPSG:900913@png/{z}/{x}/{-y}.png',
-    label: 'Mapa base IGN Argentina',
-    desc: 'Instituto Geográfico Nacional — cartografía oficial',
-    leyenda: { cols:['#2b6cb0','#276749','#f6e05e','#e53e3e','#718096'], lbl:['Agua','Veg.','Zonas cult.','Urb.','Caminos'] },
-    info: 'Mapa cartográfico oficial de Argentina del IGN. Sin NDVI pero con detalle de rutas, localidades y límites.'
-  }
-};
-
-function getSHInstanceId(){ return localStorage.getItem('campioapp_sh_instance')||''; }
 
 function toggleCop(tipo){
-  if(!mapa){toast('Abrí la pestaña Lotes primero','e');return;}
-  if(copActivo===tipo){quitarCop();return;}
-  if(capaCop){mapa.removeLayer(capaCop);capaCop=null;}
-
+  if(!mapa)return;
+  if(satActivo===tipo){quitarSat();return;}
+  if(capaSat){mapa.removeLayer(capaSat);capaSat=null;}
   const fecha=document.getElementById('fecha-cop').value||new Date().toISOString().slice(0,10);
-  const info=CAPAS_SAT_XYZ[tipo];
-  const isLocal=location.protocol==='file:';
-
-  if(tipo==='ign'){
-    // IGN funciona diferente — TMS invertido
-    capaCop=L.tileLayer(info.url(fecha),{
-      attribution:'© IGN Argentina',
-      maxZoom:18,
-      opacity:0.9,
-      tms:false
-    });
-  } else {
-    capaCop=L.tileLayer(info.url(fecha),{
-      attribution:'© NASA GIBS / MODIS Terra',
-      maxZoom:9,
-      opacity:0.82,
-      tms:false,
-      crossOrigin:true
-    });
-  }
-
-  capaCop.addTo(mapa);
-  copActivo=tipo;
-
-  ['ndvi','rgb','falso','ign'].forEach(k=>{
-    const b=document.getElementById('btn-'+k);
-    if(b) b.className='layer-btn'+(k===tipo?' active-cop':'');
-  });
-
-  // Construir link inteligente a Copernicus centrado en el campo
-  const c=mapa.getCenter(); const z=mapa.getZoom();
-  const capaCop_id = {ndvi:'3_NDVI',rgb:'1_TRUE_COLOR',falso:'2_FALSE_COLOR',ign:'1_TRUE_COLOR'}[tipo];
-  const copUrl=`https://browser.dataspace.copernicus.eu/?zoom=${z}&lat=${c.lat.toFixed(5)}&lng=${c.lng.toFixed(5)}&themeId=AGRICULTURE&datasetId=S2_L2A_CDAS&fromTime=${fecha}T00:00:00.000Z&toTime=${fecha}T23:59:59.999Z&layerId=${capaCop_id}&demSource3D=%22MAPZEN%22&cloudCoverage=30&dateMode=SINGLE`;
-
-  const infoDiv=document.getElementById('info-capa');
-  let msg = info.label+' · '+info.desc;
-  if(isLocal && tipo!=='ign') msg += ' · ⚠ Para ver NASA GIBS publicá en Netlify';
-  document.getElementById('info-capa-txt').textContent=msg;
+  const info=GIBS[tipo];
+  capaSat=L.tileLayer(info.url(fecha),{attribution:'© NASA GIBS',maxZoom:info.maxZ,opacity:0.82,crossOrigin:true});
+  capaSat.addTo(mapa);satActivo=tipo;
+  ['ndvi','rgb','falso','agri','humedad'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn'+(k===tipo?' active-cop':'');});
+  const c=mapa.getCenter();const z=mapa.getZoom();
+  const copUrl=`https://browser.dataspace.copernicus.eu/?zoom=${z}&lat=${c.lat.toFixed(5)}&lng=${c.lng.toFixed(5)}&themeId=AGRICULTURE&datasetId=S2_L2A_CDAS&fromTime=${fecha}T00:00:00.000Z&toTime=${fecha}T23:59:59.999Z&layerId=3_NDVI&cloudCoverage=30&dateMode=SINGLE`;
+  document.getElementById('info-capa-txt').textContent=info.label+' · '+fecha;
   document.getElementById('link-cop').href=copUrl;
-  document.getElementById('link-cop').textContent='🛰 Ver Sentinel-2 en Copernicus →';
-  infoDiv.style.display='flex';
-
-  const ley=info.leyenda;
+  document.getElementById('info-capa').style.display='flex';
   document.getElementById('leyenda-titulo').textContent=info.label;
-  document.getElementById('leyenda-barra').innerHTML=ley.cols.map(c=>`<div style="flex:1;background:${c}"></div>`).join('');
-  document.getElementById('leyenda-labels').innerHTML=ley.lbl.map(l=>`<span>${l}</span>`).join('');
-  document.getElementById('leyenda-desc').textContent=info.info;
+  document.getElementById('leyenda-barra').innerHTML=info.cols.map(c=>`<div style="flex:1;background:${c}"></div>`).join('');
+  document.getElementById('leyenda-labels').innerHTML=info.lbl.map(l=>`<span>${l}</span>`).join('');
+  document.getElementById('leyenda-desc').textContent=info.desc;
   document.getElementById('leyenda-div').style.display='block';
-
-  if(isLocal && tipo!=='ign'){
-    toast('⚠ NASA GIBS necesita servidor — el link a Copernicus sí funciona','e');
-  } else {
-    toast('Cargando '+info.label+'...');
-  }
-
-  capaCop.on('tileerror',function(){
-    if(isLocal){
-      document.getElementById('info-capa-txt').textContent='⚠ Bloqueado por CORS (app local). Subí la app a Netlify para ver las capas, o usá el link a Copernicus.';
-    }
-  });
+  toast('Cargando '+info.label+'...');
 }
 
-function quitarCop(){
-  if(capaCop&&mapa){mapa.removeLayer(capaCop);capaCop=null;}
-  copActivo=null;
-  ['ndvi','rgb','falso','ign'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn';});
+function toggleClima(tipo){
+  if(!mapa)return;
+  if(climaActivo===tipo){quitarClima();return;}
+  if(capaClima){mapa.removeLayer(capaClima);capaClima=null;}
+  const info=CLIMA_LAYERS[tipo];
+  capaClima=L.tileLayer(info.url,{attribution:'© OpenWeatherMap',opacity:0.65});
+  capaClima.addTo(mapa);climaActivo=tipo;
+  ['lluvia','temp','viento'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn'+(k===tipo?' active-clima':'');});
+  fetchClima();
+}
+
+function quitarSat(){
+  if(capaSat&&mapa){mapa.removeLayer(capaSat);capaSat=null;}
+  satActivo=null;
+  ['ndvi','rgb','falso','agri','humedad'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn';});
   document.getElementById('info-capa').style.display='none';
   document.getElementById('leyenda-div').style.display='none';
+}
+function quitarClima(){
+  if(capaClima&&mapa){mapa.removeLayer(capaClima);capaClima=null;}
+  climaActivo=null;
+  ['lluvia','temp','viento'].forEach(k=>{const b=document.getElementById('btn-'+k);if(b)b.className='layer-btn';});
+  document.getElementById('clima-widget').style.display='none';
+}
+function quitarTodo(){quitarSat();quitarClima();}
+function onFechaChange(){if(satActivo)toggleCop(satActivo);fetchClima();}
+
+async function fetchClima(){
+  const cfg=getCfgCampo();
+  if(!cfg.lat||!cfg.lng)return;
+  try{
+    const fecha=document.getElementById('fecha-cop')?.value||new Date().toISOString().slice(0,10);
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lng}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&timezone=America/Argentina/Buenos_Aires&start_date=${fecha}&end_date=${fecha}`;
+    const res=await fetch(url);const data=await res.json();const d=data.daily;if(!d)return;
+    const widget=document.getElementById('clima-widget');widget.style.display='block';
+    document.getElementById('clima-data').innerHTML=`
+      <div style="text-align:center"><div style="font-size:22px;font-weight:700">${d.precipitation_sum?.[0]??'—'} mm</div><div style="font-size:11px;opacity:.7">Precipitación</div></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:700">${d.temperature_2m_max?.[0]??'—'}°C</div><div style="font-size:11px;opacity:.7">Máx / ${d.temperature_2m_min?.[0]??'—'}°C Mín</div></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:700">${d.windspeed_10m_max?.[0]??'—'} km/h</div><div style="font-size:11px;opacity:.7">Viento máx</div></div>
+      <div style="text-align:center;font-size:11px;opacity:.6">📍 ${cfg.nombre||'Tu campo'}<br>${fecha}</div>`;
+  }catch(e){}
 }
 
 function guardarConfigCampo(){
@@ -1287,475 +1718,176 @@ function guardarConfigCampo(){
   const cfg={lat,lng,zoom,nombre};
   saveCfgCampo(cfg);
   if(mapa){mapa.setView([lat,lng],zoom);ponerCascoMarker(cfg);}
-  closeModal('modal-config-campo');
-  toast('Campo configurado. El mapa ahora abre centrado en tu casco.');
+  closeModal('modal-config-campo');fetchClima();
+  toast('Campo configurado');
+}
+
+function buildPopup(l){
+  const grupo=gruposList.find(g=>g.id===l.grupo_id)?.nombre||'';
+  return`<div style="font-family:sans-serif;min-width:150px">
+    <strong style="font-size:14px">${l.nombre}</strong>
+    ${grupo?`<div style="font-size:11px;color:#888;margin-top:2px">📁 ${grupo}</div>`:''}
+    <div style="font-size:12px;color:#555;margin-top:4px">${l.tipo} · ${(parseFloat(l.ha)||0).toFixed(1)} ha</div>
+    ${l.arrendado?`<div style="font-size:12px;color:#d4820a">Arrendado${l.arrendatario?' a '+l.arrendatario:''}</div>`:'<div style="font-size:12px;color:#1a5c38">Propio</div>'}
+    ${l.notas?`<div style="font-size:11px;color:#888;margin-top:4px;font-style:italic">${l.notas}</div>`:''}
+  </div>`;
 }
 
 function calcHa(ll){
-  if(!ll||ll.length<3) return 0;
-  const R=6371000; let area=0; const n=ll.length;
+  if(!ll||ll.length<3)return 0;
+  const R=6371000;let area=0;const n=ll.length;
   for(let i=0;i<n;i++){const j=(i+1)%n;const xi=ll[i].lng*Math.PI/180*Math.cos(ll[i].lat*Math.PI/180)*R;const yi=ll[i].lat*Math.PI/180*R;const xj=ll[j].lng*Math.PI/180*Math.cos(ll[j].lat*Math.PI/180)*R;const yj=ll[j].lat*Math.PI/180*R;area+=xi*yj-xj*yi;}
   return Math.abs(area/2)/10000;
 }
 
 function renderLotesEnMapa(){
-  if(!mapa||!drawnItems) return;
-  Object.values(capasLotes).forEach(l=>{try{mapa.removeLayer(l);}catch(e){}});
-  capasLotes={};
-  db.lotes.forEach(lote=>{
-    if(!lote.geojson) return;
+  if(!mapa||!drawnItems)return;
+  Object.values(capasLotesMap).forEach(l=>{try{drawnItems.removeLayer(l);}catch(e){}});
+  capasLotesMap={};
+  lotesList.forEach(lote=>{
+    if(!lote.geojson)return;
     try{
       const layer=L.geoJSON(lote.geojson,{style:{color:lote.color||'#52b788',fillColor:lote.color||'#52b788',fillOpacity:0.28,weight:2.5}});
-      layer.eachLayer(l=>{
-        l.options.loteId=lote.id;
-        l.bindPopup(`<div style="font-family:sans-serif;min-width:150px"><strong style="font-size:14px">${lote.nombre}</strong><br><span style="font-size:12px;color:#555">${lote.tipo} · ${(lote.ha||0).toFixed(1)} ha</span><br><span style="font-size:12px;color:#555">Suelo: ${lote.suelo}</span>${lote.notas?'<br><em style="font-size:11px;color:#999">'+lote.notas+'</em>':''}</div>`);
-        drawnItems.addLayer(l);
-      });
-      capasLotes[lote.id]=layer;
+      layer.eachLayer(l=>{l.options.loteId=lote.id;l.bindPopup(buildPopup(lote));drawnItems.addLayer(l);});
+      capasLotesMap[lote.id]=layer;
     }catch(ex){}
   });
 }
 
-function guardarLoteMapa(){
-  const nombre=document.getElementById('lm-nombre').value.trim();
-  if(!nombre){toast('Nombre obligatorio','e');return;}
-  if(!lotePoligTemp) return;
-  const color=document.getElementById('lm-color').value;
-  lotePoligTemp.setStyle({color,fillColor:color,fillOpacity:0.28});
-  const ll=lotePoligTemp.getLatLngs?lotePoligTemp.getLatLngs()[0]:[];
-  const ha=parseFloat(document.getElementById('lm-ha').value)||calcHa(ll);
-  const geojson=lotePoligTemp.toGeoJSON();
-  const id=uid();
-  lotePoligTemp.options.loteId=id;
-  lotePoligTemp.bindPopup(`<strong>${nombre}</strong><br>${ha.toFixed(1)} ha · ${document.getElementById('lm-tipo').value}`);
-  db.lotes.push({id,nombre,ha:parseFloat(ha.toFixed(2)),tipo:document.getElementById('lm-tipo').value,suelo:document.getElementById('lm-suelo').value,color,notas:document.getElementById('lm-notas').value.trim(),geojson});
-  lotePoligTemp=null;
-  saveDB(); closeModal('modal-lote-mapa'); renderAll();
-  toast('Lote "'+nombre+'" guardado con polígono');
-}
-function cancelarLoteMapa(){ if(lotePoligTemp){drawnItems.removeLayer(lotePoligTemp);lotePoligTemp=null;} closeModal('modal-lote-mapa'); }
-
-// =============================================================
-// IMPORTAR / EXPORTAR
-// =============================================================
-function parseCSV(txt){
-  const lines=txt.trim().split('\n').filter(l=>l.trim());
-  if(lines.length<2) return[];
-  const headers=lines[0].split(/[,;]/).map(h=>h.trim().replace(/["\r]/g,'').toLowerCase());
-  return lines.slice(1).map(line=>{const cols=line.split(/[,;]/).map(c=>c.trim().replace(/["\r]/g,''));const row={};headers.forEach((h,i)=>row[h]=cols[i]||'');return row;});
+// ============================================================
+// COTIZACIÓN DÓLAR
+// ============================================================
+async function fetchDolar(){
+  try{
+    const res=await fetch('https://dolarapi.com/v1/dolares');
+    if(!res.ok)throw new Error();
+    const data=await res.json();
+    const tipos={blue:data.find(d=>d.casa==='blue'),mep:data.find(d=>d.casa==='bolsa'),ccl:data.find(d=>d.casa==='contadoconliqui'),oficial:data.find(d=>d.casa==='oficial')};
+    if(tipos.ccl?.venta)tcActual=tipos.ccl.venta;else if(tipos.blue?.venta)tcActual=tipos.blue.venta;
+    const container=document.getElementById('dolar-values');
+    if(container)container.innerHTML=Object.entries({Blue:tipos.blue,MEP:tipos.mep,CCL:tipos.ccl,Oficial:tipos.oficial}).filter(([,v])=>v).map(([n,v])=>`<div style="display:flex;flex-direction:column;align-items:center;line-height:1.3"><span style="font-size:10px;opacity:.65;font-weight:500">${n}</span><span style="font-size:14px;font-weight:700">$${v.venta?.toLocaleString('es-AR')}</span></div>`).join('<div style="width:1px;background:rgba(255,255,255,.2);height:24px"></div>');
+    const h=document.getElementById('dolar-hora');if(h)h.textContent='Actualizado '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    localStorage.setItem('campioapp_tc_cache',JSON.stringify({tc:tcActual,ts:Date.now()}));
+    recalcular();
+  }catch(e){
+    try{const cache=JSON.parse(localStorage.getItem('campioapp_tc_cache')||'{}');if(cache.tc)tcActual=cache.tc;}catch(ex){}
+  }
 }
 
-function importGanado(input){
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const rows=parseCSV(e.target.result);let count=0;
-    rows.forEach(r=>{if(!r.caravana)return;db.animales.push({id:uid(),caravana:r.caravana,caravanaE:r.caravana_electronica||'',categoria:r.categoria||'Sin categoría',sexo:r.sexo||'',raza:r.raza||'',peso:parseFloat(r.peso_kg)||0,nacimiento:r.fecha_nacimiento||'',lote:r.lote||'',loteId:'',estado:r.estado||'Normal',madre:r.madre||'',padre:r.padre||'',procedencia:r.procedencia||'',notas:r.notas||'',fechaCarga:new Date().toISOString().slice(0,10)});count++;});
-    saveDB();renderAll();
-    const el=document.getElementById('r-animales');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${count} animales importados.</span>`;
-    toast(count+' animales importados');
-  };reader.readAsText(file,'UTF-8');
-}
-
-function importPesajes(input){
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const rows=parseCSV(e.target.result);let count=0;
-    rows.forEach(r=>{const car=r.animal_id||r.caravana||r.id||('A-'+count);db.pesajes.push({id:uid(),caravana:car,fecha:r.fecha||new Date().toISOString().slice(0,10),peso:parseFloat(r.peso_estimado||r.peso_kg||r.peso)||0,lote:r.lote||'',metodo:'Dron / GanaderIA',ganancia:'',notas:r.confianza?'Confianza: '+r.confianza:''});count++;});
-    saveDB();renderAll();
-    const el=document.getElementById('r-pesajes');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${count} pesajes importados.</span>`;
-    toast(count+' pesajes de GanaderIA importados');
-  };reader.readAsText(file,'UTF-8');
-}
-
-function importGeoJSON(input){
-  const file=input.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const gj=JSON.parse(e.target.result);let count=0;
-      const feats=gj.features||[gj];
-      feats.forEach((f,i)=>{
-        const p=f.properties||{};
-        const nombre=p.nombre||p.name||p.NOMBRE||p.Name||('Lote '+(i+1));
-        const ha=parseFloat(p.hectareas||p.ha||p.area_ha||p.AREA||0);
-        db.lotes.push({id:uid(),nombre,ha,tipo:'Agrícola',suelo:'Franco',color:'#52b788',notas:'Importado desde QGIS/GeoJSON',geojson:f});count++;
-      });
-      saveDB();renderAll();
-      const el=document.getElementById('r-geojson');if(el)el.innerHTML=`<span style="color:var(--verde)">✓ ${count} lotes importados desde GeoJSON.</span>`;
-      toast(count+' lotes importados desde QGIS');
-    }catch(ex){toast('Error al leer GeoJSON: '+ex.message,'e');}
-  };reader.readAsText(file,'UTF-8');
-}
-
-function toCSV(headers,rows){ return[headers.join(','),...rows.map(r=>headers.map(h=>{const v=(r[h]||'').toString();return v.includes(',')?'"'+v+'"':v;}).join(','))].join('\n'); }
-function dlCSV(fname,content){ const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click(); }
-function exportarCSV(tipo){
-  const cfg={animales:{h:['caravana','caravanaE','categoria','raza','sexo','peso','nacimiento','lote','estado','madre','padre','notas'],f:'animales.csv'},pesajes:{h:['fecha','caravana','lote','peso','ganancia','metodo','notas'],f:'pesajes.csv'},cultivos:{h:['cultivo','lote','variedad','siembra','ha','estado','campaña','notas'],f:'cultivos.csv'},sanidad:{h:['fecha','tipo','caravana','lote','producto','dosis','proximo','notas'],f:'sanidad.csv'}};
-  const c=cfg[tipo]; dlCSV(c.f,toCSV(c.h,db[tipo])); toast('CSV descargado');
-}
-function exportarBackup(){ const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='campioapp_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();toast('Backup descargado'); }
-
-function dlPlantilla(tipo){
-  const p={animales:'caravana,caravana_electronica,categoria,raza,sexo,peso_kg,fecha_nacimiento,lote,estado,madre,padre,notas\n0001,,Vaca,Aberdeen Angus,Hembra,380,2021-03-15,Lote Sur,Normal,,,Ejemplo\n0002,,Toro,Hereford,Macho,520,2020-05-10,Lote Norte,Normal,,,',pesajes:'animal_id,peso_estimado,confianza,fecha,lote\n0001,387,0.95,2026-05-20,Lote Sur\n0002,412,0.92,2026-05-20,Lote Norte'};
-  dlCSV('plantilla_'+tipo+'.csv',p[tipo]);
-}
-
-// =============================================================
-// TOAST
-// =============================================================
-let toastTimer;
-function toast(msg,tipo){
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.style.background=tipo==='e'?'var(--rojo)':'var(--verde)';
-  t.classList.add('show');clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
-}
-
-// =============================================================
-// MERCADO — ANÁLISIS GANADERO
-// =============================================================
-const PRECIOS_DEFAULT = {t1:4.40,t2:4.81,g1:3.59,g2:3.75,maizMdo:175,tc:1450};
-
-function getPrecios(){
-  try{return JSON.parse(localStorage.getItem('campioapp_precios'))||PRECIOS_DEFAULT;}catch(e){return PRECIOS_DEFAULT;}
-}
+// ============================================================
+// MERCADO
+// ============================================================
+const PRECIOS_DEFAULT={t1:4.40,t2:4.81,g1:3.59,g2:3.75,maizMdo:175,tc:1450};
+function getPrecios(){try{return JSON.parse(localStorage.getItem('campioapp_precios'))||PRECIOS_DEFAULT;}catch(e){return PRECIOS_DEFAULT;}}
 function savePrecios(p){localStorage.setItem('campioapp_precios',JSON.stringify(p));}
-
-function getParams(){
-  return {
-    maiz: parseFloat(document.getElementById('sl-maiz').value)||100,
-    conv: parseFloat(document.getElementById('sl-conv').value)||5.5,
-    tarifa: parseFloat(document.getElementById('sl-tarifa').value)||0.65,
-    cab: parseInt(document.getElementById('sl-cab').value)||150
-  };
-}
-
-function initMercado(){
-  const p=getPrecios();
-  // Cargar sliders con valores guardados
-  const pm=JSON.parse(localStorage.getItem('campioapp_params_mercado')||'{}');
-  if(pm.maiz) document.getElementById('sl-maiz').value=pm.maiz;
-  if(pm.conv) document.getElementById('sl-conv').value=pm.conv;
-  if(pm.tarifa) document.getElementById('sl-tarifa').value=pm.tarifa;
-  if(pm.cab) document.getElementById('sl-cab').value=pm.cab;
-  recalcular();
-}
 
 function recalcular(){
   const p=getPrecios();
-  const params=getParams();
+  const params={maiz:parseFloat(document.getElementById('sl-maiz')?.value)||100,conv:parseFloat(document.getElementById('sl-conv')?.value)||5.5,tarifa:parseFloat(document.getElementById('sl-tarifa')?.value)||0.65,cab:parseInt(document.getElementById('sl-cab')?.value)||150};
   const tc=tcActual||p.tc||1450;
   const enARS=document.getElementById('toggle-moneda')?.checked||false;
-
-  // Toggle visual
-  const track=document.getElementById('track-moneda');
-  const thumb=document.getElementById('thumb-moneda');
-  if(track) track.style.background=enARS?'var(--verde)':'var(--gris2)';
-  if(thumb) thumb.style.transform=enARS?'translateX(16px)':'translateX(0)';
-  const tcEl=document.getElementById('tc-display');
-  if(tcEl) tcEl.textContent='TC CCL: $'+Math.round(tc).toLocaleString('es-AR');
-
-  const fmt=(usd)=>enARS?'$'+Math.round(usd*tc).toLocaleString('es-AR'):'US$ '+usd.toFixed(0);
-  const fmtPrecio=(usd)=>enARS?'$'+Math.round(usd*tc).toLocaleString('es-AR')+'/kg':'US$ '+usd.toFixed(2)+'/kg';
-
-  document.getElementById('lbl-maiz').textContent='US$'+params.maiz;
-  document.getElementById('lbl-conv').textContent=params.conv.toFixed(1);
-  document.getElementById('lbl-tarifa').textContent='US$'+params.tarifa.toFixed(2);
-  document.getElementById('lbl-cab').textContent=params.cab;
-  localStorage.setItem('campioapp_params_mercado',JSON.stringify(params));
-
-  const otrosCostos=40,pctMaiz=0.62;
+  const track=document.getElementById('track-moneda');const thumb=document.getElementById('thumb-moneda');
+  if(track)track.style.background=enARS?'var(--verde)':'var(--gris2)';
+  if(thumb)thumb.style.transform=enARS?'translateX(16px)':'translateX(0)';
+  const tcEl=document.getElementById('tc-display');if(tcEl)tcEl.textContent='TC CCL: $'+Math.round(tc).toLocaleString('es-AR');
+  const fmt=usd=>enARS?'$'+Math.round(usd*tc).toLocaleString('es-AR'):'US$ '+usd.toFixed(0);
+  const fmtP=usd=>enARS?'$'+Math.round(usd*tc).toLocaleString('es-AR')+'/kg':'US$ '+usd.toFixed(2)+'/kg';
+  const g=id=>document.getElementById(id);
+  if(g('lbl-maiz'))g('lbl-maiz').textContent='US$'+params.maiz;
+  if(g('lbl-conv'))g('lbl-conv').textContent=params.conv.toFixed(1);
+  if(g('lbl-tarifa'))g('lbl-tarifa').textContent='US$'+params.tarifa.toFixed(2);
+  if(g('lbl-cab'))g('lbl-cab').textContent=params.cab;
+  const otros=40,pct=0.62;
   const e1_ing=150*p.t1,e1_mar=e1_ing;
-  const e2_compra=130*p.t2,e2_cos_maiz=(90*params.conv*pctMaiz/1000)*params.maiz;
-  const e2_ing=220*p.g1,e2_cos=e2_compra+e2_cos_maiz+otrosCostos,e2_mar=e2_ing-e2_cos;
-  const e3_cos_maiz=(60*params.conv*pctMaiz/1000)*params.maiz;
-  const e3_ing=280*p.g2,e3_cos=10+e3_cos_maiz+otrosCostos/2,e3_mar=e3_ing-e3_cos;
-  const e4_cos_maiz=(90*params.conv*pctMaiz/1000)*params.maiz;
-  const e4_ing=90*params.tarifa,e4_mar_animal=e4_ing-e4_cos_maiz;
-  const e4_mar_ciclo=e4_mar_animal*params.cab;
-
-  document.getElementById('kpi-t1').textContent=fmtPrecio(p.t1);
-  document.getElementById('kpi-t2').textContent=fmtPrecio(p.t2);
-  document.getElementById('kpi-g1').textContent=fmtPrecio(p.g1);
-  document.getElementById('kpi-g2').textContent=fmtPrecio(p.g2);
-
-  const spread=p.g1-p.t1;
-  document.getElementById('ind-spread').textContent=(spread>=0?'+':'')+fmtPrecio(spread);
-  document.getElementById('ind-spread').style.color=spread<0?'#c0392b':'#1a5c38';
-  document.getElementById('ind-relacion').textContent=Math.round(p.t1*1000/(p.maizMdo||175))+' kg';
-  const ventaja=(p.maizMdo||175)-params.maiz;
-  document.getElementById('ind-ventaja').textContent='US$'+ventaja+'/tn'+(enARS?' = $'+Math.round(ventaja*tc).toLocaleString('es-AR'):'');
-  document.getElementById('alerta-spread').style.display=spread<0?'flex':'none';
-
-  const esc=[
-    {n:'E1 — Vender ternero propio (150 kg)',       ing:e1_ing,  cos:0,        mar:e1_mar},
-    {n:'E2 — Comprar remate → gordo 220 kg',        ing:e2_ing,  cos:e2_cos,   mar:e2_mar},
-    {n:'E3 — Ternero propio: recría + feedlot 280', ing:e3_ing,  cos:e3_cos,   mar:e3_mar},
-    {n:'E4 — Maquila (por animal)',                 ing:e4_ing,  cos:e4_cos_maiz, mar:e4_mar_animal},
-  ];
+  const e2_cos=130*p.t2+(90*params.conv*pct/1000)*params.maiz+otros,e2_ing=220*p.g1,e2_mar=e2_ing-e2_cos;
+  const e3_cos=10+(60*params.conv*pct/1000)*params.maiz+otros/2,e3_ing=280*p.g2,e3_mar=e3_ing-e3_cos;
+  const e4_cos=(90*params.conv*pct/1000)*params.maiz,e4_ing=90*params.tarifa,e4_a=e4_ing-e4_cos,e4_c=e4_a*params.cab;
+  if(g('kpi-t1'))g('kpi-t1').textContent=fmtP(p.t1);
+  if(g('kpi-t2'))g('kpi-t2').textContent=fmtP(p.t2);
+  if(g('kpi-g1'))g('kpi-g1').textContent=fmtP(p.g1);
+  if(g('kpi-g2'))g('kpi-g2').textContent=fmtP(p.g2);
+  const spr=p.g1-p.t1;
+  if(g('ind-spread')){g('ind-spread').textContent=(spr>=0?'+':'')+fmtP(spr);g('ind-spread').style.color=spr<0?'#c0392b':'#1a5c38';}
+  if(g('ind-relacion'))g('ind-relacion').textContent=Math.round(p.t1*1000/(p.maizMdo||175))+' kg';
+  if(g('ind-ventaja'))g('ind-ventaja').textContent='US$'+((p.maizMdo||175)-params.maiz)+'/tn';
+  const al=g('alerta-spread');if(al)al.style.display=spr<0?'flex':'none';
+  const esc=[{n:'E1 — Vender ternero propio (150 kg)',ing:e1_ing,cos:0,mar:e1_mar},{n:'E2 — Comprar remate → gordo 220 kg',ing:e2_ing,cos:e2_cos,mar:e2_mar},{n:'E3 — Ternero propio + feedlot → 280 kg',ing:e3_ing,cos:e3_cos,mar:e3_mar},{n:'E4 — Maquila (por animal)',ing:e4_ing,cos:e4_cos,mar:e4_a}];
   const maxM=Math.max(...esc.map(e=>Math.abs(e.mar)));
-  document.getElementById('tbody-escenarios').innerHTML=esc.map(e=>{
-    const b=e.mar>50?'badge-green':e.mar>0?'badge-amber':'badge-red';
-    const l=e.mar>50?'Conveniente':e.mar>0?'Marginal':'No cierra';
-    return`<tr><td style="font-weight:500">${e.n}</td><td style="text-align:right">${fmt(e.ing)}</td><td style="text-align:right">${fmt(e.cos)}</td><td style="text-align:right;font-weight:700;color:${e.mar>=0?'var(--verde)':'var(--rojo)'}">${fmt(e.mar)}</td><td style="text-align:center"><span class="badge ${b}">${l}</span></td></tr>`;
-  }).join('');
-
-  document.getElementById('barras-escenarios').innerHTML=esc.map(e=>{
-    const pct=Math.abs(e.mar)/maxM*100;
-    const col=e.mar>50?'var(--verde)':e.mar>0?'var(--naranja)':'var(--rojo)';
-    return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--txt2)">${e.n.split('—')[0].trim()}</span><span style="font-weight:600;color:${col}">${fmt(e.mar)}</span></div><div style="background:var(--gris2);border-radius:4px;height:8px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:4px;transition:width 0.4s"></div></div></div>`;
-  }).join('');
-
-  document.getElementById('semaforo').innerHTML=[
-    {l:'Vender ternero propio ahora',ok:e1_mar>400,t:e1_mar>400?'Captura el máximo histórico':'Precio bajo actualmente'},
-    {l:'Comprar ternero para feedlot',ok:e2_mar>0,t:e2_mar>0?`Cierra: ${fmt(e2_mar)}/animal`:'Spread invertido — no cierra'},
-    {l:'Feedlot con ternero propio',ok:e3_mar>300,t:`${fmt(e3_mar)}/animal`},
-    {l:'Maquila / hotelería',ok:e4_mar_animal>20,t:e4_mar_animal>20?`${fmt(e4_mar_animal)}/animal sin capital inmovilizado`:'Revisar tarifa o costo maíz'},
-  ].map(i=>`<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--gris);border-radius:8px"><span style="font-size:18px">${i.ok?'🟢':'🔴'}</span><div><div style="font-size:13px;font-weight:500">${i.l}</div><div style="font-size:11px;color:var(--txt3)">${i.t}</div></div></div>`).join('');
-
-  const mejor=esc.reduce((a,b)=>b.mar>a.mar?b:a);
-  document.getElementById('analisis-auto').innerHTML=`<strong>Mejor opción hoy:</strong> ${mejor.n.split('—')[1]?.trim()||mejor.n} · ${fmt(mejor.mar)}/animal. `+(e4_mar_ciclo>2000?`La maquila genera ${fmt(e4_mar_ciclo)}/ciclo con ${params.cab} animales sin capital inmovilizado.`:'');
-
-  document.getElementById('kpis-maquila').innerHTML=`
-    <div style="text-align:center;padding:12px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--verde)">${fmt(e4_mar_animal)}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Margen por animal</div></div>
-    <div style="text-align:center;padding:12px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--verde)">${fmt(e4_mar_ciclo)}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Por ciclo (${params.cab} cab.)</div></div>
-    <div style="text-align:center;padding:12px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--azul)">${fmt(e4_mar_ciclo*2)}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">Est. anual (2 ciclos)</div></div>`;
+  const tb=g('tbody-escenarios');
+  if(tb)tb.innerHTML=esc.map(e=>{const b=e.mar>50?'badge-green':e.mar>0?'badge-amber':'badge-red';const l=e.mar>50?'Conveniente':e.mar>0?'Marginal':'No cierra';return`<tr><td style="font-weight:500">${e.n}</td><td style="text-align:right">${fmt(e.ing)}</td><td style="text-align:right">${fmt(e.cos)}</td><td style="text-align:right;font-weight:700;color:${e.mar>=0?'var(--verde)':'var(--rojo)'}">${fmt(e.mar)}</td><td style="text-align:center"><span class="badge ${b}">${l}</span></td></tr>`;}).join('');
+  const ba=g('barras-escenarios');
+  if(ba)ba.innerHTML=esc.map(e=>{const pct2=Math.abs(e.mar)/maxM*100;const col=e.mar>50?'var(--verde)':e.mar>0?'var(--naranja)':'var(--rojo)';return`<div style="margin-bottom:7px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px"><span style="color:var(--txt2)">${e.n.split('—')[0].trim()}</span><span style="font-weight:600;color:${col}">${fmt(e.mar)}</span></div><div style="background:var(--gris2);border-radius:4px;height:7px;overflow:hidden"><div style="width:${pct2}%;height:100%;background:${col};border-radius:4px;transition:width .4s"></div></div></div>`;}).join('');
+  const sem=g('semaforo');
+  if(sem)sem.innerHTML=[{l:'Vender ternero propio',ok:e1_mar>400,t:'Captura el máximo histórico'},{l:'Comprar ternero para feedlot',ok:e2_mar>0,t:e2_mar>0?fmt(e2_mar)+'/animal':'Spread invertido — no cierra'},{l:'Feedlot ternero propio',ok:e3_mar>300,t:fmt(e3_mar)+'/animal'},{l:'Maquila / hotelería',ok:e4_a>20,t:fmt(e4_a)+'/animal sin capital'}].map(i=>`<div style="display:flex;align-items:center;gap:8px;padding:7px;background:var(--gris);border-radius:7px"><span style="font-size:16px">${i.ok?'🟢':'🔴'}</span><div><div style="font-size:12px;font-weight:500">${i.l}</div><div style="font-size:11px;color:var(--txt3)">${i.t}</div></div></div>`).join('');
+  const aa=g('analisis-auto');
+  if(aa){const mejor=esc.reduce((a,b)=>b.mar>a.mar?b:a);aa.innerHTML=`<strong>Mejor opción:</strong> ${mejor.n.split('—')[1]?.trim()||mejor.n} · ${fmt(mejor.mar)}/animal.`+(e4_c>2000?` Maquila genera ${fmt(e4_c)}/ciclo con ${params.cab} animales.`:'');}
+  const km=g('kpis-maquila');
+  if(km)km.innerHTML=`<div style="text-align:center;padding:10px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:var(--verde)">${fmt(e4_a)}</div><div style="font-size:10px;color:var(--txt3);margin-top:3px">Por animal</div></div><div style="text-align:center;padding:10px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:var(--verde)">${fmt(e4_c)}</div><div style="font-size:10px;color:var(--txt3);margin-top:3px">Por ciclo (${params.cab} cab.)</div></div><div style="text-align:center;padding:10px;background:white;border-radius:8px;border:1px solid var(--gris2)"><div style="font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:var(--azul)">${fmt(e4_c*2)}</div><div style="font-size:10px;color:var(--txt3);margin-top:3px">Anual (2 ciclos)</div></div>`;
 }
 
 function guardarPrecios(){
-  const p={
-    t1:parseFloat(document.getElementById('pr-t1').value)||4.40,
-    t2:parseFloat(document.getElementById('pr-t2').value)||4.81,
-    g1:parseFloat(document.getElementById('pr-g1').value)||3.59,
-    g2:parseFloat(document.getElementById('pr-g2').value)||3.75,
-    maizMdo:parseFloat(document.getElementById('pr-maiz-mdo').value)||175,
-    tc:parseFloat(document.getElementById('pr-tc').value)||1450
-  };
-  savePrecios(p);
-  closeModal('modal-precios');
-  recalcular();
-  toast('Precios actualizados y recalculados');
+  const p={t1:parseFloat(document.getElementById('pr-t1').value)||4.40,t2:parseFloat(document.getElementById('pr-t2').value)||4.81,g1:parseFloat(document.getElementById('pr-g1').value)||3.59,g2:parseFloat(document.getElementById('pr-g2').value)||3.75,maizMdo:parseFloat(document.getElementById('pr-maiz-mdo').value)||175,tc:parseFloat(document.getElementById('pr-tc').value)||1450};
+  savePrecios(p);closeModal('modal-precios');recalcular();toast('Precios actualizados');
 }
 
-// Abrir modal precios con valores actuales
-const _openModalOrig=openModal;
-function openModal(id){
-  _openModalOrig(id);
-  if(id==='modal-precios'){
-    const p=getPrecios();
-    document.getElementById('pr-t1').value=p.t1;
-    document.getElementById('pr-t2').value=p.t2;
-    document.getElementById('pr-g1').value=p.g1;
-    document.getElementById('pr-g2').value=p.g2;
-    document.getElementById('pr-maiz-mdo').value=p.maizMdo;
-    document.getElementById('pr-tc').value=p.tc;
+// Gráficos históricos
+const HIST={labels:['2018','2019','2020','2021','2022','2023','2024','may-26'],ternero:[1.85,1.60,1.90,2.80,3.20,3.50,3.90,4.40],gordo:[1.65,1.45,1.70,2.30,2.70,2.90,3.20,3.59],maiz:[155,140,130,175,250,200,180,175],spread:[0.20,0.15,0.20,0.50,0.50,0.60,0.70,-0.81]};
+const CHART_CFG={ternero:{label:'Ternero invernada (US$/kg)',data:HIST.ternero,color:'#c0392b',desc:'Precio ternero 150-180 kg · Liniers/Rosgan. Mayo 2026 = RÉCORD HISTÓRICO.'},gordo:{label:'Gordo liviano (US$/kg)',data:HIST.gordo,color:'#1a5c38',desc:'Precio novillo gordo/consumo.'},maiz:{label:'Maíz Rosario (US$/tn)',data:HIST.maiz,color:'#d4820a',desc:'Pizarra Rosario. Tu maíz propio cuesta ~US$100/tn.'},spread:{label:'Spread ternero−gordo (US$/kg)',data:HIST.spread,color:'#1a5c8b',desc:'Negativo = spread invertido. Mayo 2026 = mínimo histórico.'}};
+let chartInst=null,chartActivo='ternero';
+
+async function initChart(){
+  const canvas=document.getElementById('chart-precios');
+  if(!canvas||!window.Chart)return;
+  const cfg=CHART_CFG[chartActivo];
+  let extraLabels=[],extraData=[];
+  if(estId){
+    const {data:regs}=await sb.from('registros_precios').select('fecha,precio').eq('establecimiento_id',estId).eq('cat_key',chartActivo).order('fecha');
+    if(regs){extraLabels=regs.map(r=>r.fecha.slice(0,7));extraData=regs.map(r=>r.precio);}
   }
-}
-// =============================================================
-
-// =============================================================
-// COTIZACIÓN DÓLAR — DolarAPI.com (gratis, sin API key)
-// Funciona desde servidor (Netlify). Desde file:// usa TC guardado.
-// =============================================================
-let tcActual = 1450; // fallback
-
-async function fetchDolar(){
-  try{
-    const res = await fetch('https://dolarapi.com/v1/dolares');
-    if(!res.ok) throw new Error('no response');
-    const data = await res.json();
-    // Extraer los tipos que nos interesan
-    const tipos = {
-      blue:      data.find(d=>d.casa==='blue'),
-      mep:       data.find(d=>d.casa==='bolsa'),
-      ccl:       data.find(d=>d.casa==='contadoconliqui'),
-      oficial:   data.find(d=>d.casa==='oficial'),
-    };
-    // Usar CCL como referencia para conversiones (el más cercano al libre)
-    if(tipos.ccl?.venta) tcActual = tipos.ccl.venta;
-    else if(tipos.blue?.venta) tcActual = tipos.blue.venta;
-    // Actualizar ticket en inicio
-    const container = document.getElementById('dolar-values');
-    if(container){
-      container.innerHTML = Object.entries({
-        'Blue': tipos.blue, 'MEP': tipos.mep, 'CCL': tipos.ccl, 'Oficial': tipos.oficial
-      }).filter(([,v])=>v).map(([nombre,v])=>`
-        <div style="display:flex;flex-direction:column;align-items:center;line-height:1.3">
-          <span style="font-size:10px;opacity:0.65;font-weight:500">${nombre}</span>
-          <span style="font-size:15px;font-weight:700">$${v.venta?.toLocaleString('es-AR')}</span>
-        </div>`).join('<div style="width:1px;background:rgba(255,255,255,0.2);height:28px"></div>');
-      const hora = document.getElementById('dolar-hora');
-      if(hora) hora.textContent = 'Actualizado '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-    }
-    // Guardar TC para uso offline
-    localStorage.setItem('campioapp_tc_cache', JSON.stringify({tc:tcActual, ts:Date.now()}));
-    // Si Mercado está abierto, recalcular con nuevo TC
-    if(document.getElementById('screen-mercado').classList.contains('active')) recalcular();
-  } catch(e){
-    // Usar caché o fallback
-    try{
-      const cache = JSON.parse(localStorage.getItem('campioapp_tc_cache')||'{}');
-      if(cache.tc) tcActual = cache.tc;
-    }catch(ex){}
-    const container = document.getElementById('dolar-values');
-    if(container){
-      const p = getPrecios();
-      container.innerHTML = `<span style="font-size:12px;opacity:0.7">Sin conexión · TC guardado: $${(p.tc||tcActual).toLocaleString('es-AR')}</span>`;
-    }
-  }
-}
-
-// =============================================================
-// OCULTAR PASOS si ya hay datos cargados
-// =============================================================
-function actualizarPasos(){
-  const hayDatos = db.animales.length>0 || db.lotes.length>0;
-  const el = document.getElementById('card-pasos');
-  if(el) el.style.display = hayDatos ? 'none' : 'block';
-}
-// =============================================================
-
-// =============================================================
-// GRÁFICOS HISTÓRICOS — Chart.js
-// Datos históricos reales de hacienda argentina (Liniers/Rosgan)
-// en USD/kg promedio anual. Podés editar estos arrays.
-// =============================================================
-const HIST = {
-  labels: ['2018','2019','2020','2021','2022','2023','2024','may-26'],
-  ternero: [1.85, 1.60, 1.90, 2.80, 3.20, 3.50, 3.90, 4.40],
-  gordo:   [1.65, 1.45, 1.70, 2.30, 2.70, 2.90, 3.20, 3.59],
-  maiz:    [155,  140,  130,  175,  250,  200,  180,  175],
-  spread:  [0.20, 0.15, 0.20, 0.50, 0.50, 0.60, 0.70,-0.81],
-};
-
-const CHART_CFG = {
-  ternero: { label:'Ternero invernada (US$/kg)', data:HIST.ternero, color:'#c0392b', desc:'Precio del ternero de invernada 150-180 kg (US$/kg) · Liniers + Rosgan. Mayo 2026 = RÉCORD HISTÓRICO.' },
-  gordo:   { label:'Gordo liviano (US$/kg)',      data:HIST.gordo,   color:'#1a5c38', desc:'Precio del novillo gordo/consumo (US$/kg) · Mercado de Liniers.' },
-  maiz:    { label:'Maíz Rosario (US$/tn)',       data:HIST.maiz,    color:'#d4820a', desc:'Precio del maíz disponible en pizarra Rosario (US$/tn). Tu maíz propio cuesta ~US$100/tn.' },
-  spread:  { label:'Spread ternero−gordo (US$/kg)', data:HIST.spread,color:'#1a5c8b', desc:'Diferencia de precio por kg entre ternero y gordo. Negativo = spread invertido (situación actual récord).' },
-};
-
-let chartInstance = null;
-let chartActivo = 'ternero';
-
-function initChart(){
-  const canvas = document.getElementById('chart-precios');
-  if(!canvas || !window.Chart) return;
-  const cfg = CHART_CFG[chartActivo];
-  // Combinar histórico + registros propios del mismo tipo
-  const registros = (db.registrosPrecios||[]).filter(r=>r.cat===chartActivo).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  const labelsExtra = registros.map(r=>r.fecha.slice(0,7));
-  const dataExtra   = registros.map(r=>r.precio);
-  const allLabels   = [...HIST.labels, ...labelsExtra];
-  const allData     = [...cfg.data,    ...dataExtra];
-
-  if(chartInstance){ chartInstance.destroy(); chartInstance=null; }
-  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const gridCol = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const txtCol  = isDark ? '#9a9590' : '#9a9590';
-
-  chartInstance = new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels: allLabels,
-      datasets: [{
-        label: cfg.label,
-        data: allData,
-        borderColor: cfg.color,
-        backgroundColor: cfg.color+'22',
-        borderWidth: 2.5,
-        pointRadius: 5,
-        pointBackgroundColor: cfg.color,
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        tension: 0.35,
-        fill: true,
-      }, ...(registros.length ? [{
-        label: 'Mis registros',
-        data: [...Array(HIST.labels.length).fill(null), ...dataExtra],
-        borderColor: '#7c3aed',
-        backgroundColor: '#7c3aed33',
-        borderWidth: 2,
-        pointRadius: 7,
-        pointStyle: 'star',
-        pointBackgroundColor: '#7c3aed',
-        tension: 0,
-        fill: false,
-      }]:[])],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: { labels: { color: txtCol, font: { family: "'DM Sans', sans-serif", size: 12 }, boxWidth: 16 } },
-        tooltip: {
-          backgroundColor: isDark ? '#2c2c2a' : '#fff',
-          titleColor: isDark ? '#c2c0b6' : '#1a1a18',
-          bodyColor: isDark ? '#9a9590' : '#5a5a55',
-          borderColor: isDark ? '#444441' : '#e0ddd8',
-          borderWidth: 1,
-          padding: 10,
-          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : '—'}` }
-        }
-      },
-      scales: {
-        x: { ticks: { color: txtCol, font: { size: 11 } }, grid: { color: gridCol } },
-        y: { ticks: { color: txtCol, font: { size: 11 } }, grid: { color: gridCol },
-             title: { display: true, text: chartActivo==='maiz'?'US$/tn':'US$/kg', color: txtCol, font: { size: 11 } } }
-      }
-    }
-  });
-  document.getElementById('chart-desc').textContent = cfg.desc;
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  chartInst=new Chart(canvas,{type:'line',data:{labels:[...HIST.labels,...extraLabels],datasets:[{label:cfg.label,data:[...cfg.data,...new Array(extraLabels.length).fill(null)],borderColor:cfg.color,backgroundColor:cfg.color+'22',borderWidth:2.5,pointRadius:5,pointBackgroundColor:cfg.color,pointBorderColor:'#fff',pointBorderWidth:2,tension:0.35,fill:true},{label:'Mis registros',data:[...new Array(HIST.labels.length).fill(null),...extraData],borderColor:'#7c3aed',pointRadius:7,pointStyle:'star',pointBackgroundColor:'#7c3aed',tension:0,fill:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9a9590',font:{family:"'DM Sans',sans-serif",size:11},boxWidth:14}},tooltip:{backgroundColor:'#fff',titleColor:'#1a1a18',bodyColor:'#5a5a55',borderColor:'#e0ddd8',borderWidth:1,padding:9}},scales:{x:{ticks:{color:'#9a9590',font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},y:{ticks:{color:'#9a9590',font:{size:10}},grid:{color:'rgba(0,0,0,.05)'},title:{display:true,text:chartActivo==='maiz'?'US$/tn':'US$/kg',color:'#9a9590',font:{size:10}}}}}});
+  document.getElementById('chart-desc').textContent=cfg.desc;
 }
 
 function setChart(tipo){
-  chartActivo = tipo;
-  ['ternero','gordo','maiz','spread'].forEach(k=>{
-    const b = document.getElementById('btn-chart-'+k);
-    if(b) b.style.cssText = k===tipo ? 'background:var(--verde);color:white;border:none;font-size:11px' : 'background:var(--gris);border:1px solid var(--gris2);font-size:11px';
-  });
+  chartActivo=tipo;
+  ['ternero','gordo','maiz','spread'].forEach(k=>{const b=document.getElementById('btn-chart-'+k);if(b)b.style.cssText=k===tipo?'background:var(--verde);color:white;border:none;font-size:11px':'background:var(--gris);border:1px solid var(--gris2);font-size:11px';});
   initChart();
 }
 
-function guardarRegistroPrecio(){
-  const fecha  = document.getElementById('reg-fecha').value;
-  const precio = parseFloat(document.getElementById('reg-precio').value);
-  if(!fecha||!precio){ toast('Fecha y precio son obligatorios','e'); return; }
-  if(!db.registrosPrecios) db.registrosPrecios=[];
-  const catMap = {'Ternero 150–180 kg':'ternero','Ternero 130–150 kg':'ternero','Gordo liviano 220 kg':'gordo','Novillo gordo 280 kg':'gordo','Maíz (US$/tn)':'maiz','Spread ternero-gordo':'spread'};
-  db.registrosPrecios.push({id:uid(),fecha,cat:catMap[document.getElementById('reg-cat').value]||'ternero',catLabel:document.getElementById('reg-cat').value,precio,fuente:document.getElementById('reg-fuente').value.trim(),notas:document.getElementById('reg-notas').value.trim()});
-  saveDB(); closeModal('modal-precio-registro');
-  renderRegistros(); initChart();
-  toast('Registro guardado y gráfico actualizado');
+async function guardarRegistroPrecio(){
+  if(!estId)return;
+  const fecha=document.getElementById('reg-fecha').value;
+  const precio=parseFloat(document.getElementById('reg-precio').value);
+  if(!fecha||!precio){toast('Fecha y precio son obligatorios','e');return;}
+  const catMap={'Ternero 150–180 kg':'ternero','Ternero 130–150 kg':'ternero','Gordo liviano 220 kg':'gordo','Novillo gordo 280 kg':'gordo','Maíz (US$/tn)':'maiz'};
+  const catLabel=document.getElementById('reg-cat').value;
+  const {error}=await sb.from('registros_precios').insert({establecimiento_id:estId,fecha,categoria:catLabel,cat_key:catMap[catLabel]||'ternero',precio,fuente:document.getElementById('reg-fuente').value.trim()||null,cargado_por:sesion.user.id});
+  if(error){toast('Error: '+error.message,'e');return;}
+  closeModal('modal-precio-registro');initChart();renderRegistrosPrecio();
+  toast('Precio registrado');
 }
 
-function renderRegistros(){
-  const wrap = document.getElementById('tabla-registros-wrap');
-  if(!wrap) return;
-  const lista = db.registrosPrecios||[];
-  if(!lista.length){ wrap.innerHTML='<div class="empty" style="padding:20px"><p style="font-size:13px">Agregá tus propios registros de precios para ver la evolución en el gráfico.</p></div>'; return; }
-  wrap.innerHTML='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Categoría</th><th>Precio</th><th>Fuente</th><th>Notas</th><th></th></tr></thead><tbody>'+
-    [...lista].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(r=>`<tr>
-      <td>${r.fecha}</td><td>${r.catLabel}</td><td><strong>${r.precio.toFixed(2)}</strong></td>
-      <td style="font-size:12px;color:var(--txt3)">${r.fuente||'—'}</td>
-      <td style="font-size:12px;color:var(--txt3)">${r.notas||'—'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="borrarRegistro('${r.id}')">✕</button></td>
-    </tr>`).join('')+'</tbody></table></div>';
+async function renderRegistrosPrecio(){
+  if(!estId)return;
+  const {data}=await sb.from('registros_precios').select('*').eq('establecimiento_id',estId).order('fecha',{ascending:false});
+  const wrap=document.getElementById('tabla-registros-wrap');if(!wrap)return;
+  if(!data||!data.length){wrap.innerHTML='<p style="font-size:12px;color:var(--txt3);margin-top:8px">Sin registros propios aún.</p>';return;}
+  wrap.innerHTML='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Categoría</th><th>Precio</th><th>Fuente</th></tr></thead><tbody>'+data.map(r=>`<tr><td>${r.fecha}</td><td>${r.categoria}</td><td><strong>${r.precio.toFixed(2)}</strong></td><td style="font-size:11px;color:var(--txt3)">${r.fuente||'—'}</td></tr>`).join('')+'</tbody></table></div>';
 }
 
-function borrarRegistro(id){
-  if(!confirm('¿Eliminar este registro?')) return;
-  db.registrosPrecios=(db.registrosPrecios||[]).filter(r=>r.id!==id);
-  saveDB(); renderRegistros(); initChart();
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer;
+function toast(msg,tipo){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=tipo==='e'?'var(--rojo)':'var(--verde)';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
 }
-// =============================================================
-
-loadDB();
-initMercado();
-fetchDolar();
 </script>
 </body>
 </html>
